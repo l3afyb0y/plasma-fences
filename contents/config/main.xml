@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name=""/>
+
+    <group name="General">
+        <!-- Background opacity: 0.0 = fully transparent, 1.0 = fully opaque -->
+        <entry name="backgroundOpacity" type="Double">
+            <default>0.7</default>
+        </entry>
+
+        <!-- Whether the container is collapsed (rolled up) -->
+        <entry name="collapsed" type="Bool">
+            <default>false</default>
+        </entry>
+
+        <!-- Icon size in pixels -->
+        <entry name="iconSize" type="Int">
+            <default>48</default>
+        </entry>
+
+        <!-- Path to the folder this fence displays -->
+        <entry name="folderPath" type="String">
+            <default></default>
+        </entry>
+    </group>
+</kcfg>
