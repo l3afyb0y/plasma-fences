@@ -1,0 +1,14 @@
+# Claude Code artifacts
+CLAUDE.md
+.claude/
+
+# Editor/IDE
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

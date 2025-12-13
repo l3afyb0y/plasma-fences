@@ -93,6 +93,34 @@ Item {
         return iconMap[extension] || "text-x-generic"
     }
 
+    // Hover highlight background
+    Rectangle {
+        anchors.fill: parent
+        radius: 4
+        color: delegateMouseArea.containsMouse
+            ? Qt.rgba(Kirigami.Theme.highlightColor.r,
+                      Kirigami.Theme.highlightColor.g,
+                      Kirigami.Theme.highlightColor.b, 0.2)
+            : "transparent"
+
+        Behavior on color {
+            ColorAnimation { duration: 100 }
+        }
+    }
+
+    // Click handler for opening files
+    MouseArea {
+        id: delegateMouseArea
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+
+        // Double-click to open file/folder with default application
+        onDoubleClicked: {
+            Qt.openUrlExternally(iconDelegate.fileUrl)
+        }
+    }
+
     Column {
         anchors.fill: parent
         anchors.margins: 4

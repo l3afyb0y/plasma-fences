@@ -1,29 +1,39 @@
 # Plasma Fences
 
-A KDE Plasma 6 widget that provides collapsible, transparent containers for organizing desktop files and shortcuts. Inspired by Stardock Fences for Windows.
+A desktop organizer for KDE Plasma 6, inspired by Stardock Fences for Windows. Create collapsible, transparent containers on your desktop to keep files and shortcuts organized.
 
 ![Plasma 6](https://img.shields.io/badge/Plasma-6.0%2B-blue)
 ![Qt 6](https://img.shields.io/badge/Qt-6-green)
 ![Wayland](https://img.shields.io/badge/Wayland-compatible-brightgreen)
+![Version](https://img.shields.io/badge/version-0.3.0-orange)
+
+## What it does
+
+Plasma Fences gives you transparent containers (called "fences") that sit on your desktop. Each fence displays the contents of a folder - drop files in, double-click to open them, and collapse the fence when you need more space.
+
+You can stack multiple fences vertically, or arrange them in a grid. When you collapse a fence, the others slide up to fill the gap automatically.
 
 ## Features
 
-- **Transparent containers** - Dark tinted background that lets your wallpaper show through
-- **Collapsible** - Click the handle bar to roll up/down with smooth animation
-- **File thumbnails** - Image previews for photos, mimetype icons for other files
-- **Drag and drop** - Drop files from Dolphin or other apps to copy them to the folder
-- **Smooth scrolling** - Mouse wheel scrolling with no visible scrollbar
-- **Configurable** - Choose folder, adjust opacity, change icon size
+**Multiple panels** - Add as many fences as you need, each pointing to a different folder. They stack vertically for 1-2 panels, or arrange in a grid for 3+.
+
+**Collapse/expand** - Click the handle bar to roll up a fence. Other fences slide into place automatically.
+
+**Resizable** - Drag the dividers between fences to adjust their heights.
+
+**File interaction** - Double-click files to open them. Drag files from Dolphin to copy them into a fence.
+
+**Thumbnails** - Images show previews, other files show their mimetype icons.
+
+**Configurable** - Each fence has its own folder, opacity, icon size, and height settings.
 
 ## Requirements
 
-- KDE Plasma 6.0 or later
+- KDE Plasma 6.0+
 - Qt 6
-- Wayland or X11 session
+- Works on both Wayland and X11
 
 ## Installation
-
-### From source
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/plasma-fences.git
@@ -31,57 +41,53 @@ cd plasma-fences
 kpackagetool6 -t Plasma/Applet -i .
 ```
 
-### Update
-
+To update after pulling changes:
 ```bash
 kpackagetool6 -t Plasma/Applet -u .
 ```
 
-### Uninstall
-
+To uninstall:
 ```bash
 kpackagetool6 -t Plasma/Applet -r org.kde.plasma.fences
 ```
 
-## Usage
+## Getting started
 
-1. Right-click your desktop and select "Add Widgets..."
-2. Search for "Fences" and add it to your desktop
-3. Right-click the widget and select "Configure..." to choose a folder
-4. Click the handle bar at the top to collapse/expand
-5. Drag files onto the widget to copy them to the configured folder
-6. Scroll with your mouse wheel when content overflows
+1. Right-click your desktop → "Add Widgets..."
+2. Search for "Fences" and add it
+3. Right-click the widget → "Configure..." to set up your folders
+4. Add more panels in the "Panels" tab
+5. Adjust layout options in the "Layout" tab
 
 ## Configuration
 
-- **Folder** - The directory whose contents are displayed
-- **Opacity** - Background transparency (10% - 100%)
-- **Icon size** - Size of file icons (24px - 128px)
+The configuration dialog has two tabs:
 
-## Tips
+**Panels** - Add/remove fences and configure each one:
+- Folder path
+- Background opacity (10-100%)
+- Icon size (24-128px)
+- Panel height (100-500px)
 
-- Add multiple Fences widgets to organize different folders
-- Use lower opacity to better see your wallpaper
-- Collapse Fences you're not actively using to save space
+**Layout** - Control how fences are arranged:
+- Auto (default): stacks 1-2 panels, grid for 3+
+- Stack: always vertical
+- Grid: always grid layout
+- Grid columns (2-4)
 
-## Building / Development
+## Development
 
-No build step required - this is a pure QML plasmoid.
-
-For development, use:
+Pure QML, no build step needed. To test changes:
 
 ```bash
-# Test in a window (faster iteration)
 plasmawindowed org.kde.plasma.fences
+```
 
-# View QML errors
+Check for errors:
+```bash
 journalctl -f QT_CATEGORY=js QT_CATEGORY=qml
 ```
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Contributing
-
-Issues and pull requests are welcome!
+MIT

@@ -3,8 +3,13 @@ import org.kde.plasma.configuration
 
 ConfigModel {
     ConfigCategory {
-        name: "General"
+        name: "Panels"
         icon: "configure"
         source: "configGeneral.qml"
+    }
+    ConfigCategory {
+        name: "Layout"
+        icon: "view-grid"
+        source: "configLayout.qml"
     }
 }

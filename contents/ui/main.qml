@@ -1,280 +1,325 @@
 import QtQuick
 import QtQuick.Controls
-import Qt.labs.folderlistmodel
 import Qt.labs.platform as Platform
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
-import org.kde.plasma.plasma5support as Plasma5Support
 import org.kde.kirigami as Kirigami
 
 // PlasmoidItem is the root type for all Plasma 6 widgets
+// This is now a multi-fence container that holds stacked FencePanel items
 PlasmoidItem {
     id: root
 
     // Disable Plasma's default background frame
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
-    // Icon size from configuration
-    readonly property int iconSize: Plasmoid.configuration.iconSize
+    // Default values for new panels
+    readonly property int defaultIconSize: 48
+    readonly property real defaultOpacity: 0.7
+    readonly property int defaultExpandedHeight: 250
 
-    // Collapsed state from configuration
-    property bool isCollapsed: Plasmoid.configuration.collapsed
-
-    // Handle bar height
+    // Handle bar height (used for height calculations)
     readonly property int handleHeight: 24
 
-    // Expanded height for the container
-    readonly property int expandedHeight: 250
+    // Grid layout configuration
+    readonly property string layoutMode: Plasmoid.configuration.layoutMode || "auto"
+    readonly property int gridColumns: Plasmoid.configuration.gridColumns || 2
 
-    // Get the target folder path (without file:// prefix)
-    readonly property string targetFolderPath: {
-        if (Plasmoid.configuration.folderPath && Plasmoid.configuration.folderPath.length > 0) {
-            return Plasmoid.configuration.folderPath
-        }
-        // Fall back to user's home directory via StandardLocation
-        var path = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
-        // Remove file:// prefix if present
-        if (path.startsWith("file://")) {
-            path = path.substring(7)
-        }
-        return path
+    // Determine if we should use grid layout
+    readonly property bool useGridLayout: {
+        if (layoutMode === "stack") return false
+        if (layoutMode === "grid") return true
+        // Auto mode: use grid for 3+ panels
+        return panelModel.count >= 3
     }
+
+    // Calculate grid dimensions
+    readonly property int effectiveGridColumns: Math.min(gridColumns, panelModel.count)
+    readonly property int gridRows: Math.ceil(panelModel.count / effectiveGridColumns)
+
+    // Grid spacing
+    readonly property int gridSpacing: 4
 
     // Set preferred size for the widget
     preferredRepresentation: fullRepresentation
 
-    // DataSource for running shell commands
-    Plasma5Support.DataSource {
-        id: executable
-        engine: "executable"
-        connectedSources: []
+    // ListModel to hold panel configurations
+    ListModel {
+        id: panelModel
+    }
 
-        onNewData: function(source, data) {
-            disconnectSource(source)
+    // Parse panel configs from StringList configuration
+    // Format: "folderPath|collapsed|opacity|iconSize|expandedHeight"
+    function parsePanelConfigs() {
+        panelModel.clear()
+
+        var configs = Plasmoid.configuration.panelConfigs
+        if (!configs || configs.length === 0) {
+            // Default: one panel with home directory
+            var homePath = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
+            if (homePath.startsWith("file://")) {
+                homePath = homePath.substring(7)
+            }
+            panelModel.append({
+                folderPath: homePath,
+                collapsed: false,
+                panelOpacity: defaultOpacity,
+                iconSize: defaultIconSize,
+                expandedHeight: defaultExpandedHeight
+            })
+            return
+        }
+
+        for (var i = 0; i < configs.length; i++) {
+            var parts = configs[i].split("|")
+            if (parts.length >= 5) {
+                panelModel.append({
+                    folderPath: parts[0],
+                    collapsed: parts[1] === "true",
+                    panelOpacity: parseFloat(parts[2]) || defaultOpacity,
+                    iconSize: parseInt(parts[3]) || defaultIconSize,
+                    expandedHeight: parseInt(parts[4]) || defaultExpandedHeight
+                })
+            }
         }
     }
 
-    // Helper function to copy files
-    function copyFileToFolder(sourceUrl) {
-        var sourcePath = sourceUrl.toString().replace("file://", "")
-        var command = 'cp -n "' + sourcePath + '" "' + targetFolderPath + '/"'
-        executable.connectSource(command)
+    // Serialize panel configs back to StringList for persistence
+    function savePanelConfigs() {
+        var configs = []
+        for (var i = 0; i < panelModel.count; i++) {
+            var panel = panelModel.get(i)
+            configs.push(
+                panel.folderPath + "|" +
+                panel.collapsed + "|" +
+                panel.panelOpacity + "|" +
+                panel.iconSize + "|" +
+                panel.expandedHeight
+            )
+        }
+        Plasmoid.configuration.panelConfigs = configs
+    }
+
+    // Handle collapse state change from a panel
+    function onPanelCollapsedChanged(index, collapsed) {
+        if (index >= 0 && index < panelModel.count) {
+            panelModel.setProperty(index, "collapsed", collapsed)
+            savePanelConfigs()
+        }
+    }
+
+    // Initialize on component completion
+    Component.onCompleted: {
+        parsePanelConfigs()
+    }
+
+    // Re-parse when configuration changes externally (e.g., from config UI)
+    Connections {
+        target: Plasmoid.configuration
+        function onPanelConfigsChanged() {
+            parsePanelConfigs()
+        }
+    }
+
+    // Height of resize handles between panels
+    readonly property int resizeHandleHeight: 6
+
+    // Calculate total height for stack layout (including resize handles)
+    function calculateStackHeight() {
+        var total = 0
+        for (var i = 0; i < panelModel.count; i++) {
+            var panel = panelModel.get(i)
+            total += panel.collapsed ? handleHeight : panel.expandedHeight
+            // Add resize handle height between panels (not after last)
+            if (i < panelModel.count - 1) {
+                total += resizeHandleHeight
+            }
+        }
+        return Math.max(total, handleHeight)
+    }
+
+    // Calculate height for grid layout
+    function calculateGridHeight() {
+        // Find max height for each row
+        var rowHeights = []
+        for (var i = 0; i < gridRows; i++) {
+            rowHeights.push(0)
+        }
+
+        for (var i = 0; i < panelModel.count; i++) {
+            var panel = panelModel.get(i)
+            var row = Math.floor(i / effectiveGridColumns)
+            var panelHeight = panel.collapsed ? handleHeight : panel.expandedHeight
+            rowHeights[row] = Math.max(rowHeights[row], panelHeight)
+        }
+
+        var total = 0
+        for (var i = 0; i < rowHeights.length; i++) {
+            total += rowHeights[i]
+            if (i < rowHeights.length - 1) {
+                total += gridSpacing
+            }
+        }
+        return Math.max(total, handleHeight)
+    }
+
+    // Calculate total height based on layout mode
+    function calculateTotalHeight() {
+        return useGridLayout ? calculateGridHeight() : calculateStackHeight()
+    }
+
+    // Handle resize drag between panels
+    function onPanelResize(index, delta) {
+        if (index < 0 || index >= panelModel.count - 1) return
+
+        var currentPanel = panelModel.get(index)
+        var nextPanel = panelModel.get(index + 1)
+
+        // Only resize expanded panels
+        if (currentPanel.collapsed || nextPanel.collapsed) return
+
+        var newCurrentHeight = Math.max(100, Math.min(500, currentPanel.expandedHeight + delta))
+        var newNextHeight = Math.max(100, Math.min(500, nextPanel.expandedHeight - delta))
+
+        // Only apply if both are within bounds
+        if (newCurrentHeight >= 100 && newCurrentHeight <= 500 &&
+            newNextHeight >= 100 && newNextHeight <= 500) {
+            panelModel.setProperty(index, "expandedHeight", newCurrentHeight)
+            panelModel.setProperty(index + 1, "expandedHeight", newNextHeight)
+        }
     }
 
     // The full representation is what shows on the desktop
-    fullRepresentation: Rectangle {
+    fullRepresentation: Item {
         id: container
 
-        // Track if something is being dragged over
-        property bool isDragHovering: false
+        implicitWidth: root.useGridLayout ? 300 * root.effectiveGridColumns + root.gridSpacing * (root.effectiveGridColumns - 1) : 300
+        implicitHeight: calculateTotalHeight()
 
-        // Width stays constant, height animates
-        implicitWidth: 300
-        implicitHeight: root.isCollapsed ? root.handleHeight : root.expandedHeight
-
-        // Animate height changes
-        Behavior on implicitHeight {
-            NumberAnimation {
-                duration: 250
-                easing.type: Easing.OutCubic
+        // Re-calculate dimensions when model or layout changes
+        Connections {
+            target: panelModel
+            function onCountChanged() {
+                container.implicitHeight = Qt.binding(function() { return calculateTotalHeight() })
+                container.implicitWidth = Qt.binding(function() {
+                    return root.useGridLayout ? 300 * root.effectiveGridColumns + root.gridSpacing * (root.effectiveGridColumns - 1) : 300
+                })
+            }
+            function onDataChanged() {
+                container.implicitHeight = Qt.binding(function() { return calculateTotalHeight() })
             }
         }
 
-        // Dark tinted transparent background
-        color: Qt.rgba(0, 0, 0, Plasmoid.configuration.backgroundOpacity * 0.7)
+        // Stack layout for 1-2 panels (or when forced to stack mode)
+        Column {
+            id: fenceStack
+            anchors.fill: parent
+            spacing: 0
+            visible: !root.useGridLayout
 
-        // Rounded corners for a polished look
-        radius: 8
+            Repeater {
+                id: stackRepeater
+                model: root.useGridLayout ? null : panelModel
 
-        // Border only shows when dragging over
-        border.width: isDragHovering ? 2 : 0
-        border.color: Kirigami.Theme.highlightColor
+                delegate: Column {
+                    width: fenceStack.width
+                    spacing: 0
 
-        Behavior on border.width {
-            NumberAnimation { duration: 150 }
-        }
+                    property int delegateIndex: index
 
-        // FolderListModel reads the contents of a directory
-        FolderListModel {
-            id: folderModel
+                    FencePanel {
+                        id: stackPanelDelegate
+                        width: parent.width
+                        folderPath: model.folderPath
+                        panelOpacity: model.panelOpacity
+                        iconSize: model.iconSize
+                        isCollapsed: model.collapsed
+                        expandedHeight: model.expandedHeight
+                        panelIndex: delegateIndex
 
-            // Use configured path, or fall back to home directory
-            folder: "file://" + root.targetFolderPath
-
-            // Show both files and folders
-            showDirs: true
-            showFiles: true
-
-            // Include hidden files (starting with .)
-            showHidden: false
-
-            // Sort alphabetically, folders first
-            sortField: FolderListModel.Name
-            sortReversed: false
-        }
-
-        // Handle bar at the top - click to collapse/expand
-        Rectangle {
-            id: handleBar
-
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: root.handleHeight
-
-            // Slightly lighter dark tint for the handle
-            color: Qt.rgba(0.15, 0.15, 0.15, Plasmoid.configuration.backgroundOpacity * 0.85)
-
-            // Match parent's corners when collapsed, top corners only when expanded
-            radius: container.radius
-
-            // Cover bottom corners when expanded (so handle blends with container)
-            Rectangle {
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: parent.radius
-                color: parent.color
-                visible: !root.isCollapsed
-            }
-
-            // Visual indicator (small horizontal line)
-            Rectangle {
-                anchors.centerIn: parent
-                width: 40
-                height: 3
-                radius: 1.5
-                color: "white"
-                opacity: 0.5
-            }
-
-            // Click area for toggling
-            MouseArea {
-                id: handleMouseArea
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                hoverEnabled: true
-
-                onClicked: {
-                    root.isCollapsed = !root.isCollapsed
-                    // Save to configuration so it persists
-                    Plasmoid.configuration.collapsed = root.isCollapsed
-                }
-            }
-
-            // Hover effect
-            states: State {
-                when: handleMouseArea.containsMouse
-                PropertyChanges {
-                    target: handleBar
-                    color: Qt.rgba(
-                        Kirigami.Theme.highlightColor.r,
-                        Kirigami.Theme.highlightColor.g,
-                        Kirigami.Theme.highlightColor.b,
-                        Plasmoid.configuration.backgroundOpacity * 0.85
-                    )
-                }
-            }
-
-            transitions: Transition {
-                ColorAnimation { duration: 150 }
-            }
-        }
-
-        // Drop area wrapping the grid for receiving files
-        DropArea {
-            id: dropArea
-
-            anchors.top: handleBar.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-
-            onEntered: function(drag) {
-                container.isDragHovering = true
-            }
-
-            onExited: {
-                container.isDragHovering = false
-            }
-
-            onDropped: function(drop) {
-                container.isDragHovering = false
-
-                if (drop.hasUrls) {
-                    for (var i = 0; i < drop.urls.length; i++) {
-                        root.copyFileToFolder(drop.urls[i])
+                        onCollapsedChanged: function(idx, collapsed) {
+                            root.onPanelCollapsedChanged(idx, collapsed)
+                        }
                     }
-                    drop.accepted = true
-                }
-            }
 
-            // Grid of icons inside the drop area
-            GridView {
-                id: iconGrid
+                    // Resize handle between panels
+                    Rectangle {
+                        width: parent.width
+                        height: root.resizeHandleHeight
+                        color: "transparent"
+                        visible: delegateIndex < panelModel.count - 1 && panelModel.count > 1
 
-                anchors.fill: parent
-                anchors.margins: 8
-                anchors.topMargin: 4
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 50
+                            height: 4
+                            radius: 2
+                            color: stackResizeArea.containsMouse || stackResizeArea.pressed
+                                ? Kirigami.Theme.highlightColor
+                                : Qt.rgba(1, 1, 1, 0.3)
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                        }
 
-                // Hide when collapsed
-                visible: !root.isCollapsed
-                opacity: root.isCollapsed ? 0 : 1
+                        MouseArea {
+                            id: stackResizeArea
+                            anchors.fill: parent
+                            cursorShape: Qt.SplitVCursor
+                            hoverEnabled: true
+                            property real startY: 0
 
-                Behavior on opacity {
-                    NumberAnimation { duration: 200 }
-                }
-
-                // Cell size based on icon size plus padding for label
-                cellWidth: root.iconSize + 16
-                cellHeight: root.iconSize + 32
-
-                // Use the folder model as data source
-                model: folderModel
-
-                // Use our custom delegate for each item
-                delegate: IconDelegate {
-                    iconSize: root.iconSize
-                }
-
-                // Clip content that overflows
-                clip: true
-
-                // Scrolling behavior
-                boundsBehavior: Flickable.StopAtBounds
-                flickDeceleration: 1500
-                maximumFlickVelocity: 2000
-                pixelAligned: true
-
-                // Smooth scrolling for mouse wheel
-                WheelHandler {
-                    id: wheelHandler
-                    target: iconGrid
-                    orientation: Qt.Vertical
-                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-
-                    onWheel: function(event) {
-                        // Smooth scroll by adjusting contentY directly
-                        var delta = event.angleDelta.y
-                        var newY = iconGrid.contentY - delta
-
-                        // Clamp to bounds
-                        newY = Math.max(0, Math.min(newY, iconGrid.contentHeight - iconGrid.height))
-                        iconGrid.contentY = newY
+                            onPressed: function(mouse) { startY = mouse.y }
+                            onPositionChanged: function(mouse) {
+                                if (pressed) {
+                                    var delta = mouse.y - startY
+                                    root.onPanelResize(delegateIndex, delta)
+                                    startY = mouse.y
+                                }
+                            }
+                            onReleased: root.savePanelConfigs()
+                        }
                     }
                 }
+            }
+        }
 
-                // Animate contentY changes for smoothness
-                Behavior on contentY {
-                    SmoothedAnimation {
-                        duration: 150
-                        velocity: -1
+        // Grid layout for 3+ panels (or when forced to grid mode)
+        Grid {
+            id: fenceGrid
+            anchors.fill: parent
+            columns: root.effectiveGridColumns
+            spacing: root.gridSpacing
+            visible: root.useGridLayout
+
+            Repeater {
+                id: gridRepeater
+                model: root.useGridLayout ? panelModel : null
+
+                delegate: FencePanel {
+                    id: gridPanelDelegate
+
+                    // Calculate cell width
+                    property int cellWidth: (container.width - root.gridSpacing * (root.effectiveGridColumns - 1)) / root.effectiveGridColumns
+
+                    width: cellWidth
+                    folderPath: model.folderPath
+                    panelOpacity: model.panelOpacity
+                    iconSize: model.iconSize
+                    isCollapsed: model.collapsed
+                    expandedHeight: model.expandedHeight
+                    panelIndex: index
+
+                    onCollapsedChanged: function(idx, collapsed) {
+                        root.onPanelCollapsedChanged(idx, collapsed)
                     }
                 }
+            }
 
-                // Hide the scrollbar completely
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AlwaysOff
+            // Animate grid layout changes
+            move: Transition {
+                NumberAnimation {
+                    properties: "x,y"
+                    duration: 250
+                    easing.type: Easing.OutCubic
                 }
             }
         }

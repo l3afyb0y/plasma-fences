@@ -6,22 +6,33 @@
     <kcfgfile name=""/>
 
     <group name="General">
-        <!-- Background opacity: 0.0 = fully transparent, 1.0 = fully opaque -->
+        <!-- Panel configurations as StringList -->
+        <!-- Each entry format: "folderPath|collapsed|opacity|iconSize|expandedHeight" -->
+        <entry name="panelConfigs" type="StringList">
+            <default></default>
+        </entry>
+
+        <!-- Layout mode: auto, stack, or grid -->
+        <!-- auto = stack for 1-2 panels, grid for 3+ -->
+        <entry name="layoutMode" type="String">
+            <default>auto</default>
+        </entry>
+
+        <!-- Number of columns in grid mode -->
+        <entry name="gridColumns" type="Int">
+            <default>2</default>
+        </entry>
+
+        <!-- Legacy single-panel settings (kept for migration) -->
         <entry name="backgroundOpacity" type="Double">
             <default>0.7</default>
         </entry>
-
-        <!-- Whether the container is collapsed (rolled up) -->
         <entry name="collapsed" type="Bool">
             <default>false</default>
         </entry>
-
-        <!-- Icon size in pixels -->
         <entry name="iconSize" type="Int">
             <default>48</default>
         </entry>
-
-        <!-- Path to the folder this fence displays -->
         <entry name="folderPath" type="String">
             <default></default>
         </entry>
