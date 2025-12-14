@@ -5,7 +5,7 @@ A desktop organizer for KDE Plasma 6, inspired by Stardock Fences for Windows. C
 ![Plasma 6](https://img.shields.io/badge/Plasma-6.0%2B-blue)
 ![Qt 6](https://img.shields.io/badge/Qt-6-green)
 ![Wayland](https://img.shields.io/badge/Wayland-compatible-brightgreen)
-![Version](https://img.shields.io/badge/version-0.3.0-orange)
+![Version](https://img.shields.io/badge/version-0.3.1-orange)
 
 ## What it does
 
@@ -21,7 +21,7 @@ You can stack multiple fences vertically, or arrange them in a grid. When you co
 
 **Resizable** - Drag the dividers between fences to adjust their heights.
 
-**File interaction** - Double-click files to open them. Drag files from Dolphin to copy them into a fence.
+**File interaction** - Double-click files to open them. Drag files in from Dolphin, or drag them out to other apps.
 
 **Thumbnails** - Images show previews, other files show their mimetype icons.
 
@@ -36,7 +36,7 @@ You can stack multiple fences vertically, or arrange them in a grid. When you co
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/plasma-fences.git
+git clone https://github.com/l3afyb0y/plasma-fences.git
 cd plasma-fences
 kpackagetool6 -t Plasma/Applet -i .
 ```
