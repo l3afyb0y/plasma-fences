@@ -93,6 +93,14 @@ Item {
         return iconMap[extension] || "text-x-generic"
     }
 
+    // Drag support - allows dragging files out of fences
+    Drag.active: delegateMouseArea.drag.active
+    Drag.dragType: Drag.Automatic
+    Drag.supportedActions: Qt.CopyAction
+    Drag.mimeData: {
+        "text/uri-list": iconDelegate.fileUrl.toString()
+    }
+
     // Hover highlight background
     Rectangle {
         anchors.fill: parent
@@ -108,16 +116,26 @@ Item {
         }
     }
 
-    // Click handler for opening files
+    // Click and drag handler
     MouseArea {
         id: delegateMouseArea
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
 
+        // Enable drag with threshold to avoid accidental drags
+        drag.target: iconDelegate
+        drag.threshold: 10
+
         // Double-click to open file/folder with default application
         onDoubleClicked: {
             Qt.openUrlExternally(iconDelegate.fileUrl)
+        }
+
+        // Reset position after drag ends (item stays in place, only data transfers)
+        onReleased: {
+            iconDelegate.x = 0
+            iconDelegate.y = 0
         }
     }
 
