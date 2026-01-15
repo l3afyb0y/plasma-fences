@@ -16,27 +16,103 @@ KCM.SimpleKCM {
     // Internal panel list for preview
     property var panelList: []
 
+    // Default values mirror the general config page
+    readonly property real defaultOpacity: 0.7
+    readonly property int defaultIconSize: 48
+    readonly property int defaultExpandedHeight: 250
+
+    // Resolve the user's home path without the file:// prefix
+    function homePath() {
+        var home = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
+        return home.startsWith("file://") ? home.substring(7) : home
+    }
+
+    // Clamp and sanitize panel data
+    function sanitizePanel(panel) {
+        panel = panel || {}
+        var safeFolder = panel.folderPath && panel.folderPath.length > 0 ? panel.folderPath : homePath()
+
+        var safeOpacity = panel.panelOpacity
+        if (isNaN(safeOpacity)) {
+            safeOpacity = defaultOpacity
+        }
+        safeOpacity = Math.min(1.0, Math.max(0.1, safeOpacity))
+
+        var safeIconSize = parseInt(panel.iconSize)
+        if (isNaN(safeIconSize)) {
+            safeIconSize = defaultIconSize
+        }
+        safeIconSize = Math.min(128, Math.max(24, safeIconSize))
+
+        var safeHeight = parseInt(panel.expandedHeight)
+        if (isNaN(safeHeight)) {
+            safeHeight = defaultExpandedHeight
+        }
+        safeHeight = Math.min(500, Math.max(100, safeHeight))
+
+        return {
+            folderPath: safeFolder,
+            collapsed: !!panel.collapsed,
+            panelOpacity: safeOpacity,
+            iconSize: safeIconSize,
+            expandedHeight: safeHeight
+        }
+    }
+
+    // Legacy single-panel configuration fallback
+    function legacyPanelConfig() {
+        var hasPlasmoidConfig = typeof plasmoid !== "undefined" && plasmoid.configuration
+        return sanitizePanel({
+            folderPath: hasPlasmoidConfig ? plasmoid.configuration.folderPath : "",
+            collapsed: hasPlasmoidConfig ? plasmoid.configuration.collapsed : false,
+            panelOpacity: hasPlasmoidConfig ? plasmoid.configuration.backgroundOpacity : defaultOpacity,
+            iconSize: hasPlasmoidConfig ? plasmoid.configuration.iconSize : defaultIconSize,
+            expandedHeight: defaultExpandedHeight
+        })
+    }
+
+    function serializePanel(panel) {
+        var safePanel = sanitizePanel(panel)
+        return safePanel.folderPath + "|" +
+                safePanel.collapsed + "|" +
+                safePanel.panelOpacity + "|" +
+                safePanel.iconSize + "|" +
+                safePanel.expandedHeight
+    }
+
     Component.onCompleted: {
         parsePanelConfigs()
     }
+
+    onCfg_panelConfigsChanged: parsePanelConfigs()
 
     function parsePanelConfigs() {
         panelList = []
         var configs = cfg_panelConfigs
 
         if (!configs || configs.length === 0) {
-            var homePath = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
-            if (homePath.startsWith("file://")) {
-                homePath = homePath.substring(7)
-            }
-            panelList.push({ folderPath: homePath })
+            var legacyPanel = legacyPanelConfig()
+            panelList.push(legacyPanel)
+            cfg_panelConfigs = [serializePanel(legacyPanel)]
         } else {
             for (var i = 0; i < configs.length; i++) {
                 var parts = configs[i].split("|")
                 if (parts.length >= 1) {
-                    panelList.push({ folderPath: parts[0] })
+                    panelList.push(sanitizePanel({
+                        folderPath: parts[0],
+                        collapsed: parts.length >= 2 ? parts[1] === "true" : false,
+                        panelOpacity: parts.length >= 3 ? parseFloat(parts[2]) : defaultOpacity,
+                        iconSize: parts.length >= 4 ? parseInt(parts[3]) : defaultIconSize,
+                        expandedHeight: parts.length >= 5 ? parseInt(parts[4]) : defaultExpandedHeight
+                    }))
                 }
             }
+        }
+
+        if (panelList.length === 0) {
+            var fallbackPanel = sanitizePanel({})
+            panelList.push(fallbackPanel)
+            cfg_panelConfigs = [serializePanel(fallbackPanel)]
         }
         panelListChanged()
     }

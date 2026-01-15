@@ -21,6 +21,54 @@ PlasmoidItem {
     // Handle bar height (used for height calculations)
     readonly property int handleHeight: 24
 
+    // Resolve the user's home path without the file:// prefix
+    function homePath() {
+        var home = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
+        return home.startsWith("file://") ? home.substring(7) : home
+    }
+
+    // Clamp and sanitize a panel configuration object
+    function sanitizePanelConfig(panel) {
+        panel = panel || {}
+        var safeFolder = panel.folderPath && panel.folderPath.length > 0 ? panel.folderPath : homePath()
+        var safeOpacity = panel.panelOpacity
+        if (isNaN(safeOpacity)) {
+            safeOpacity = defaultOpacity
+        }
+        safeOpacity = Math.min(1.0, Math.max(0.1, safeOpacity))
+
+        var safeIconSize = parseInt(panel.iconSize)
+        if (isNaN(safeIconSize)) {
+            safeIconSize = defaultIconSize
+        }
+        safeIconSize = Math.min(128, Math.max(24, safeIconSize))
+
+        var safeHeight = parseInt(panel.expandedHeight)
+        if (isNaN(safeHeight)) {
+            safeHeight = defaultExpandedHeight
+        }
+        safeHeight = Math.min(500, Math.max(100, safeHeight))
+
+        return {
+            folderPath: safeFolder,
+            collapsed: !!panel.collapsed,
+            panelOpacity: safeOpacity,
+            iconSize: safeIconSize,
+            expandedHeight: safeHeight
+        }
+    }
+
+    // Migrate legacy single-panel config into the multi-panel format
+    function migrateLegacyPanel() {
+        return sanitizePanelConfig({
+            folderPath: Plasmoid.configuration.folderPath,
+            collapsed: Plasmoid.configuration.collapsed,
+            panelOpacity: Plasmoid.configuration.backgroundOpacity,
+            iconSize: Plasmoid.configuration.iconSize,
+            expandedHeight: defaultExpandedHeight
+        })
+    }
+
     // Grid layout configuration
     readonly property string layoutMode: Plasmoid.configuration.layoutMode || "auto"
     readonly property int gridColumns: Plasmoid.configuration.gridColumns || 2
@@ -35,7 +83,9 @@ PlasmoidItem {
 
     // Calculate grid dimensions
     readonly property int effectiveGridColumns: Math.min(gridColumns, panelModel.count)
-    readonly property int gridRows: Math.ceil(panelModel.count / effectiveGridColumns)
+    readonly property int gridRows: panelModel.count === 0
+        ? 0
+        : Math.ceil(panelModel.count / Math.max(1, effectiveGridColumns))
 
     // Grid spacing
     readonly property int gridSpacing: 4
@@ -55,32 +105,31 @@ PlasmoidItem {
 
         var configs = Plasmoid.configuration.panelConfigs
         if (!configs || configs.length === 0) {
-            // Default: one panel with home directory
-            var homePath = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
-            if (homePath.startsWith("file://")) {
-                homePath = homePath.substring(7)
-            }
-            panelModel.append({
-                folderPath: homePath,
-                collapsed: false,
-                panelOpacity: defaultOpacity,
-                iconSize: defaultIconSize,
-                expandedHeight: defaultExpandedHeight
-            })
+            // Default or legacy: one panel, migrated from old config when available
+            var legacyPanel = migrateLegacyPanel()
+            panelModel.append(legacyPanel)
+            savePanelConfigs()
             return
         }
 
         for (var i = 0; i < configs.length; i++) {
             var parts = configs[i].split("|")
             if (parts.length >= 5) {
-                panelModel.append({
+                var parsedPanel = sanitizePanelConfig({
                     folderPath: parts[0],
                     collapsed: parts[1] === "true",
                     panelOpacity: parseFloat(parts[2]) || defaultOpacity,
                     iconSize: parseInt(parts[3]) || defaultIconSize,
                     expandedHeight: parseInt(parts[4]) || defaultExpandedHeight
                 })
+                panelModel.append(parsedPanel)
             }
+        }
+
+        // Guard against an empty model if the config data was malformed
+        if (panelModel.count === 0) {
+            panelModel.append(sanitizePanelConfig({}))
+            savePanelConfigs()
         }
     }
 
@@ -88,7 +137,7 @@ PlasmoidItem {
     function savePanelConfigs() {
         var configs = []
         for (var i = 0; i < panelModel.count; i++) {
-            var panel = panelModel.get(i)
+            var panel = sanitizePanelConfig(panelModel.get(i))
             configs.push(
                 panel.folderPath + "|" +
                 panel.collapsed + "|" +

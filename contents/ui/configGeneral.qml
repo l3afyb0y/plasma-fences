@@ -20,10 +20,69 @@ KCM.SimpleKCM {
     readonly property int defaultIconSize: 48
     readonly property int defaultExpandedHeight: 250
 
+    // Resolve the user's home path without the file:// prefix
+    function homePath() {
+        var home = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
+        return home.startsWith("file://") ? home.substring(7) : home
+    }
+
+    // Clamp and sanitize panel values
+    function sanitizePanel(panel) {
+        panel = panel || {}
+        var safeFolder = panel.folderPath && panel.folderPath.length > 0 ? panel.folderPath : homePath()
+
+        var safeOpacity = panel.panelOpacity
+        if (isNaN(safeOpacity)) {
+            safeOpacity = defaultOpacity
+        }
+        safeOpacity = Math.min(1.0, Math.max(0.1, safeOpacity))
+
+        var safeIconSize = parseInt(panel.iconSize)
+        if (isNaN(safeIconSize)) {
+            safeIconSize = defaultIconSize
+        }
+        safeIconSize = Math.min(128, Math.max(24, safeIconSize))
+
+        var safeHeight = parseInt(panel.expandedHeight)
+        if (isNaN(safeHeight)) {
+            safeHeight = defaultExpandedHeight
+        }
+        safeHeight = Math.min(500, Math.max(100, safeHeight))
+
+        return {
+            folderPath: safeFolder,
+            collapsed: !!panel.collapsed,
+            panelOpacity: safeOpacity,
+            iconSize: safeIconSize,
+            expandedHeight: safeHeight
+        }
+    }
+
+    // Legacy single-panel configuration fallback
+    function legacyPanelConfig() {
+        var hasPlasmoidConfig = typeof plasmoid !== "undefined" && plasmoid.configuration
+        return sanitizePanel({
+            folderPath: hasPlasmoidConfig ? plasmoid.configuration.folderPath : "",
+            collapsed: hasPlasmoidConfig ? plasmoid.configuration.collapsed : false,
+            panelOpacity: hasPlasmoidConfig ? plasmoid.configuration.backgroundOpacity : defaultOpacity,
+            iconSize: hasPlasmoidConfig ? plasmoid.configuration.iconSize : defaultIconSize,
+            expandedHeight: defaultExpandedHeight
+        })
+    }
+
+    // Refresh bindings and repeater after mutations
+    function refreshPanels() {
+        panelList = panelList.map(function(panel) { return sanitizePanel(panel) })
+        panelListChanged()
+        panelRepeater.model = panelList.length
+    }
+
     // Parse configs on load
     Component.onCompleted: {
         parsePanelConfigs()
     }
+
+    onCfg_panelConfigsChanged: parsePanelConfigs()
 
     // Parse StringList into internal model
     function parsePanelConfigs() {
@@ -31,41 +90,39 @@ KCM.SimpleKCM {
         var configs = cfg_panelConfigs
 
         if (!configs || configs.length === 0) {
-            // Default: one panel with home directory
-            var homePath = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
-            if (homePath.startsWith("file://")) {
-                homePath = homePath.substring(7)
-            }
-            panelList.push({
-                folderPath: homePath,
-                collapsed: false,
-                panelOpacity: defaultOpacity,
-                iconSize: defaultIconSize,
-                expandedHeight: defaultExpandedHeight
-            })
+            // Default: one panel using legacy settings when available
+            panelList.push(legacyPanelConfig())
+            refreshPanels()
+            savePanelConfigs()
+            return
         } else {
             for (var i = 0; i < configs.length; i++) {
                 var parts = configs[i].split("|")
                 if (parts.length >= 5) {
-                    panelList.push({
+                    panelList.push(sanitizePanel({
                         folderPath: parts[0],
                         collapsed: parts[1] === "true",
                         panelOpacity: parseFloat(parts[2]) || defaultOpacity,
                         iconSize: parseInt(parts[3]) || defaultIconSize,
                         expandedHeight: parseInt(parts[4]) || defaultExpandedHeight
-                    })
+                    }))
                 }
             }
         }
-        panelListChanged()
-        panelRepeater.model = panelList.length
+
+        if (panelList.length === 0) {
+            panelList.push(sanitizePanel({}))
+            savePanelConfigs()
+        }
+
+        refreshPanels()
     }
 
     // Serialize internal model back to StringList
     function savePanelConfigs() {
         var configs = []
         for (var i = 0; i < panelList.length; i++) {
-            var panel = panelList[i]
+            var panel = sanitizePanel(panelList[i])
             configs.push(
                 panel.folderPath + "|" +
                 panel.collapsed + "|" +
@@ -79,19 +136,14 @@ KCM.SimpleKCM {
 
     // Add a new panel
     function addPanel() {
-        var homePath = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
-        if (homePath.startsWith("file://")) {
-            homePath = homePath.substring(7)
-        }
-        panelList.push({
-            folderPath: homePath,
+        panelList.push(sanitizePanel({
+            folderPath: homePath(),
             collapsed: false,
             panelOpacity: defaultOpacity,
             iconSize: defaultIconSize,
             expandedHeight: defaultExpandedHeight
-        })
-        panelListChanged()
-        panelRepeater.model = panelList.length
+        }))
+        refreshPanels()
         savePanelConfigs()
     }
 
@@ -101,8 +153,7 @@ KCM.SimpleKCM {
             return  // Keep at least one panel
         }
         panelList.splice(index, 1)
-        panelListChanged()
-        panelRepeater.model = panelList.length
+        refreshPanels()
         savePanelConfigs()
     }
 
@@ -110,6 +161,7 @@ KCM.SimpleKCM {
     function updatePanel(index, property, value) {
         if (index >= 0 && index < panelList.length) {
             panelList[index][property] = value
+            refreshPanels()
             savePanelConfigs()
         }
     }
@@ -124,9 +176,6 @@ KCM.SimpleKCM {
             if (targetPanelIndex >= 0) {
                 var path = selectedFolder.toString().replace("file://", "")
                 updatePanel(targetPanelIndex, "folderPath", path)
-                panelListChanged()
-                panelRepeater.model = 0
-                panelRepeater.model = panelList.length
             }
         }
     }
@@ -237,7 +286,7 @@ KCM.SimpleKCM {
                                 }
 
                                 Label {
-                                    text: Math.round((panelData.panelOpacity || 0.7) * 100) + "%"
+                                    text: Math.round(opacitySlider.value * 100) + "%"
                                     Layout.preferredWidth: 45
                                 }
                             }
