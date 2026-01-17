@@ -1,93 +1,55 @@
 # Plasma Fences
 
-A desktop organizer for KDE Plasma 6, inspired by Stardock Fences for Windows. Create collapsible, transparent containers on your desktop to keep files and shortcuts organized.
+A desktop organization widget for KDE Plasma 6, inspired by Stardock Fences. It provides stackable, collapsible containers (fences) to group your desktop icons and folders.
 
 ![Plasma 6](https://img.shields.io/badge/Plasma-6.0%2B-blue)
 ![Qt 6](https://img.shields.io/badge/Qt-6-green)
 ![Wayland](https://img.shields.io/badge/Wayland-compatible-brightgreen)
-![Version](https://img.shields.io/badge/version-0.3.1-orange)
-
-## What it does
-
-Plasma Fences gives you transparent containers (called "fences") that sit on your desktop. Each fence displays the contents of a folder - drop files in, double-click to open them, and collapse the fence when you need more space.
-
-You can stack multiple fences vertically, or arrange them in a grid. When you collapse a fence, the others slide up to fill the gap automatically.
+![Version](https://img.shields.io/badge/version-0.4.0-orange)
 
 ## Features
 
-**Multiple panels** - Add as many fences as you need, each pointing to a different folder. They stack vertically for 1-2 panels, or arrange in a grid for 3+.
-
-**Collapse/expand** - Click the handle bar to roll up a fence. Other fences slide into place automatically.
-
-**Resizable** - Drag the dividers between fences to adjust their heights.
-
-**File interaction** - Double-click files to open them. Drag files in from Dolphin, or drag them out to other apps.
-
-**Thumbnails** - Images show previews, other files show their mimetype icons.
-
-**Configurable** - Each fence has its own folder, opacity, icon size, and height settings.
-
-## Requirements
-
-- KDE Plasma 6.0+
-- Qt 6
-- Works on both Wayland and X11
+- **Multi-Panel Support**: Create multiple containers within a single widget.
+- **Stack & Grid Layouts**: Panels can be stacked vertically or organized in a grid.
+- **Rollup (Collapse)**: Double-click a panel's title bar to collapse it.
+- **Peeking**: Hover over a rolled-up panel to temporarily view its contents.
+- **Desktop Pages**: Organize your fences across multiple desktop "pages" and switch between them using dots at the bottom.
+- **Automatic Sorting**: Automatically move files from your Desktop into specific fences based on file extensions.
+- **Quick-hide**: Double-click the desktop (widget background) to instantly hide or show all your fences.
+- **Folder Portals**: Mirror any folder on your system directly onto your desktop.
+- **Resizing**: Easily adjust the height of individual panels by dragging the resize handle.
+- **Customization**: Adjust icon size, background opacity, and sort rules for each panel.
 
 ## Installation
 
+### Dependencies
+- KDE Plasma 6
+- `kirigami`
+- `plasma5support`
+
+### Installation Script
+Run the included installation script to package and install the plasmoid:
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+### Manual Installation
 ```bash
 git clone https://github.com/l3afyb0y/plasma-fences.git
 cd plasma-fences
 kpackagetool6 -t Plasma/Applet -i .
 ```
 
-To update after pulling changes:
-```bash
-kpackagetool6 -t Plasma/Applet -u .
-```
+## Usage
 
-To uninstall:
-```bash
-kpackagetool6 -t Plasma/Applet -r org.kde.plasma.fences
-```
-
-## Getting started
-
-1. Right-click your desktop → "Add Widgets..."
-2. Search for "Fences" and add it
-3. Right-click the widget → "Configure..." to set up your folders
-4. Add more panels in the "Panels" tab
-5. Adjust layout options in the "Layout" tab
-
-## Configuration
-
-The configuration dialog has two tabs:
-
-**Panels** - Add/remove fences and configure each one:
-- Folder path
-- Background opacity (10-100%)
-- Icon size (24-128px)
-- Panel height (100-500px)
-
-**Layout** - Control how fences are arranged:
-- Auto (default): stacks 1-2 panels, grid for 3+
-- Stack: always vertical
-- Grid: always grid layout
-- Grid columns (2-4)
-
-## Development
-
-Pure QML, no build step needed. To test changes:
-
-```bash
-plasmawindowed org.kde.plasma.fences
-```
-
-Check for errors:
-```bash
-journalctl -f QT_CATEGORY=js QT_CATEGORY=qml
-```
+1. **Add the Widget**: Right-click your desktop, select "Add Widgets", and search for "Fences".
+2. **Configure**: Right-click the widget and select "Fences Settings".
+3. **Add Panels**: In the "Panels" tab, you can add new containers and set their source folder.
+4. **Auto-Sort**: Enable "Automatic Sorting" in the General settings and define rules (e.g., `jpg, png, pdf`) for each panel.
+5. **Rollup**: Double-click the title bar of any panel to collapse it. Hovering over it while collapsed will "peek" the contents.
+6. **Hide**: Double-click any empty area within the widget to toggle the visibility of all fences.
+7. **Pages**: Adjust the "Desktop Pages" count in the Layout tab to enable multiple pages. Switch between them using the indicator dots.
 
 ## License
-
 MIT

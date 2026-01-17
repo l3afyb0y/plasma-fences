@@ -14,13 +14,47 @@ KCM.SimpleKCM {
 
     // Configuration property for saving
     property var cfg_panelConfigs: []
+    property bool cfg_autoSortEnabled: false
+    property var cfg_snapshots: []
+
+    // Snapshot logic
+    function saveSnapshot() {
+        var now = new Date().toLocaleString()
+        var currentConfig = cfg_panelConfigs.join("!!")
+        var snapshot = now + "||" + currentConfig
+        var newSnapshots = []
+        for (var i=0; i<cfg_snapshots.length; i++) newSnapshots.push(cfg_snapshots[i])
+        newSnapshots.push(snapshot)
+        cfg_snapshots = newSnapshots
+    }
+
+    function restoreSnapshot(index) {
+        if (index >= 0 && index < cfg_snapshots.length) {
+            var parts = cfg_snapshots[index].split("||")
+            if (parts.length >= 2) {
+                cfg_panelConfigs = parts[1].split("!!")
+            }
+        }
+    }
+
+    function deleteSnapshot(index) {
+        if (index >= 0 && index < cfg_snapshots.length) {
+            var newSnapshots = []
+            for (var i=0; i<cfg_snapshots.length; i++) {
+                if (i !== index) newSnapshots.push(cfg_snapshots[i])
+            }
+            cfg_snapshots = newSnapshots
+        }
+    }
 
     // Default values for new panels
     readonly property real defaultOpacity: 0.7
     readonly property int defaultIconSize: 48
     readonly property int defaultExpandedHeight: 250
+    readonly property string defaultSortRules: ""
+    readonly property int defaultPageId: 0
 
-    // Resolve the user's home path without the file:// prefix
+    // Resolve the user's home path
     function homePath() {
         var home = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
         return home.startsWith("file://") ? home.substring(7) : home
@@ -30,31 +64,18 @@ KCM.SimpleKCM {
     function sanitizePanel(panel) {
         panel = panel || {}
         var safeFolder = panel.folderPath && panel.folderPath.length > 0 ? panel.folderPath : homePath()
-
-        var safeOpacity = panel.panelOpacity
-        if (isNaN(safeOpacity)) {
-            safeOpacity = defaultOpacity
-        }
-        safeOpacity = Math.min(1.0, Math.max(0.1, safeOpacity))
-
-        var safeIconSize = parseInt(panel.iconSize)
-        if (isNaN(safeIconSize)) {
-            safeIconSize = defaultIconSize
-        }
-        safeIconSize = Math.min(128, Math.max(24, safeIconSize))
-
-        var safeHeight = parseInt(panel.expandedHeight)
-        if (isNaN(safeHeight)) {
-            safeHeight = defaultExpandedHeight
-        }
-        safeHeight = Math.min(500, Math.max(100, safeHeight))
+        var safeOpacity = Math.min(1.0, Math.max(0.1, parseFloat(panel.panelOpacity) || defaultOpacity))
+        var safeIconSize = Math.min(128, Math.max(24, parseInt(panel.iconSize) || defaultIconSize))
+        var safeHeight = Math.min(800, Math.max(100, parseInt(panel.expandedHeight) || defaultExpandedHeight))
 
         return {
             folderPath: safeFolder,
             collapsed: !!panel.collapsed,
             panelOpacity: safeOpacity,
             iconSize: safeIconSize,
-            expandedHeight: safeHeight
+            expandedHeight: safeHeight,
+            sortRules: panel.sortRules || defaultSortRules,
+            pageId: parseInt(panel.pageId) || defaultPageId
         }
     }
 
@@ -66,31 +87,25 @@ KCM.SimpleKCM {
             collapsed: hasPlasmoidConfig ? plasmoid.configuration.collapsed : false,
             panelOpacity: hasPlasmoidConfig ? plasmoid.configuration.backgroundOpacity : defaultOpacity,
             iconSize: hasPlasmoidConfig ? plasmoid.configuration.iconSize : defaultIconSize,
-            expandedHeight: defaultExpandedHeight
+            expandedHeight: defaultExpandedHeight,
+            sortRules: "",
+            pageId: 0
         })
     }
 
-    // Refresh bindings and repeater after mutations
     function refreshPanels() {
         panelList = panelList.map(function(panel) { return sanitizePanel(panel) })
         panelListChanged()
         panelRepeater.model = panelList.length
     }
 
-    // Parse configs on load
-    Component.onCompleted: {
-        parsePanelConfigs()
-    }
-
+    Component.onCompleted: parsePanelConfigs()
     onCfg_panelConfigsChanged: parsePanelConfigs()
 
-    // Parse StringList into internal model
     function parsePanelConfigs() {
         panelList = []
         var configs = cfg_panelConfigs
-
         if (!configs || configs.length === 0) {
-            // Default: one panel using legacy settings when available
             panelList.push(legacyPanelConfig())
             refreshPanels()
             savePanelConfigs()
@@ -102,23 +117,19 @@ KCM.SimpleKCM {
                     panelList.push(sanitizePanel({
                         folderPath: parts[0],
                         collapsed: parts[1] === "true",
-                        panelOpacity: parseFloat(parts[2]) || defaultOpacity,
-                        iconSize: parseInt(parts[3]) || defaultIconSize,
-                        expandedHeight: parseInt(parts[4]) || defaultExpandedHeight
+                        panelOpacity: parts[2],
+                        iconSize: parts[3],
+                        expandedHeight: parts[4],
+                        sortRules: parts[5] || "",
+                        pageId: parts[6] || 0
                     }))
                 }
             }
         }
-
-        if (panelList.length === 0) {
-            panelList.push(sanitizePanel({}))
-            savePanelConfigs()
-        }
-
+        if (panelList.length === 0) panelList.push(sanitizePanel({}))
         refreshPanels()
     }
 
-    // Serialize internal model back to StringList
     function savePanelConfigs() {
         var configs = []
         for (var i = 0; i < panelList.length; i++) {
@@ -128,36 +139,27 @@ KCM.SimpleKCM {
                 panel.collapsed + "|" +
                 panel.panelOpacity + "|" +
                 panel.iconSize + "|" +
-                panel.expandedHeight
+                panel.expandedHeight + "|" +
+                panel.sortRules + "|" +
+                panel.pageId
             )
         }
         cfg_panelConfigs = configs
     }
 
-    // Add a new panel
     function addPanel() {
-        panelList.push(sanitizePanel({
-            folderPath: homePath(),
-            collapsed: false,
-            panelOpacity: defaultOpacity,
-            iconSize: defaultIconSize,
-            expandedHeight: defaultExpandedHeight
-        }))
+        panelList.push(sanitizePanel({}))
         refreshPanels()
         savePanelConfigs()
     }
 
-    // Remove a panel
     function removePanel(index) {
-        if (panelList.length <= 1) {
-            return  // Keep at least one panel
-        }
+        if (panelList.length <= 1) return
         panelList.splice(index, 1)
         refreshPanels()
         savePanelConfigs()
     }
 
-    // Update a panel property
     function updatePanel(index, property, value) {
         if (index >= 0 && index < panelList.length) {
             panelList[index][property] = value
@@ -166,12 +168,10 @@ KCM.SimpleKCM {
         }
     }
 
-    // Folder dialog (shared)
     FolderDialog {
         id: folderDialog
         title: "Select Folder"
         property int targetPanelIndex: -1
-
         onAccepted: {
             if (targetPanelIndex >= 0) {
                 var path = selectedFolder.toString().replace("file://", "")
@@ -184,149 +184,126 @@ KCM.SimpleKCM {
         anchors.fill: parent
         spacing: Kirigami.Units.largeSpacing
 
-        // Header with Add button
+        Kirigami.Heading { text: "Global Settings"; level: 2 }
+
+        Kirigami.FormLayout {
+            CheckBox {
+                Kirigami.FormData.label: "Automatic Sorting:"
+                text: "Move files from Desktop matching rules"
+                checked: cfg_autoSortEnabled
+                onToggled: cfg_autoSortEnabled = checked
+            }
+        }
+
+        Kirigami.Separator { Layout.fillWidth: true }
+
         RowLayout {
             Layout.fillWidth: true
-
-            Kirigami.Heading {
-                text: "Fence Panels"
-                level: 2
-            }
-
+            Kirigami.Heading { text: "Snapshots"; level: 2 }
             Item { Layout.fillWidth: true }
-
             Button {
-                icon.name: "list-add"
-                text: "Add Panel"
-                onClicked: addPanel()
+                icon.name: "document-save"
+                text: "Take Snapshot"
+                onClicked: saveSnapshot()
             }
         }
 
-        // Separator
-        Kirigami.Separator {
-            Layout.fillWidth: true
+        Label {
+            text: "Snapshots save the current layout and panel configurations so you can restore them later."
+            opacity: 0.6; Layout.fillWidth: true; wrapMode: Text.WordWrap
         }
 
-        // Scrollable list of panels
-        ScrollView {
+        Repeater {
+            model: cfg_snapshots.length
+            delegate: RowLayout {
+                Layout.fillWidth: true; spacing: Kirigami.Units.smallSpacing
+                Label { text: cfg_snapshots[index].split("||")[0]; Layout.fillWidth: true }
+                Button { icon.name: "document-revert"; text: "Restore"; onClicked: restoreSnapshot(index) }
+                Button { icon.name: "edit-delete"; onClicked: deleteSnapshot(index) }
+            }
+        }
+
+        Kirigami.Separator { Layout.fillWidth: true }
+
+        RowLayout {
             Layout.fillWidth: true
-            Layout.fillHeight: true
+            Kirigami.Heading { text: "Fence Panels"; level: 2 }
+            Item { Layout.fillWidth: true }
+            Button { icon.name: "list-add"; text: "Add Panel"; onClicked: addPanel() }
+        }
 
+        ScrollView {
+            Layout.fillWidth: true; Layout.fillHeight: true
             ColumnLayout {
-                width: parent.width
-                spacing: Kirigami.Units.largeSpacing
-
+                width: parent.width; spacing: Kirigami.Units.largeSpacing
                 Repeater {
                     id: panelRepeater
                     model: panelList.length
-
                     delegate: Kirigami.Card {
                         Layout.fillWidth: true
-
                         property int panelIndex: index
                         property var panelData: panelList[index] || {}
-
                         header: RowLayout {
-                            spacing: Kirigami.Units.smallSpacing
-
-                            Kirigami.Heading {
-                                text: "Panel " + (panelIndex + 1)
-                                level: 3
-                            }
-
+                            Kirigami.Heading { text: "Panel " + (panelIndex + 1); level: 3 }
                             Item { Layout.fillWidth: true }
-
                             Button {
-                                icon.name: "edit-delete"
-                                text: "Remove"
-                                enabled: panelList.length > 1
-                                onClicked: removePanel(panelIndex)
+                                icon.name: "edit-delete"; text: "Remove"
+                                enabled: panelList.length > 1; onClicked: removePanel(panelIndex)
                             }
                         }
-
                         contentItem: Kirigami.FormLayout {
-                            // Folder path
                             RowLayout {
                                 Kirigami.FormData.label: "Folder:"
-                                spacing: Kirigami.Units.smallSpacing
-
                                 TextField {
-                                    id: folderField
-                                    Layout.fillWidth: true
-                                    text: panelData.folderPath || ""
-                                    placeholderText: "Select a folder..."
+                                    Layout.fillWidth: true; text: panelData.folderPath || ""
                                     onTextEdited: updatePanel(panelIndex, "folderPath", text)
                                 }
-
                                 Button {
                                     icon.name: "folder-open"
                                     onClicked: {
                                         folderDialog.targetPanelIndex = panelIndex
-                                        folderDialog.currentFolder = panelData.folderPath
-                                            ? "file://" + panelData.folderPath
-                                            : Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation)
+                                        folderDialog.currentFolder = panelData.folderPath ? "file://" + panelData.folderPath : Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation)
                                         folderDialog.open()
                                     }
                                 }
                             }
-
-                            // Opacity slider
+                            TextField {
+                                Kirigami.FormData.label: "Sort Rules (extensions):"
+                                Layout.fillWidth: true; text: panelData.sortRules || ""
+                                placeholderText: "e.g. jpg, png, pdf"
+                                onTextEdited: updatePanel(panelIndex, "sortRules", text)
+                            }
+                            RowLayout {
+                                Kirigami.FormData.label: "Desktop Page:"
+                                SpinBox {
+                                    from: 1; to: 5; value: (panelData.pageId || 0) + 1
+                                    onValueModified: updatePanel(panelIndex, "pageId", value - 1)
+                                }
+                                Label { text: "Index" }
+                            }
                             RowLayout {
                                 Kirigami.FormData.label: "Opacity:"
-                                spacing: Kirigami.Units.smallSpacing
-
                                 Slider {
-                                    id: opacitySlider
-                                    Layout.fillWidth: true
-                                    from: 0.1
-                                    to: 1.0
-                                    stepSize: 0.05
-                                    value: panelData.panelOpacity || 0.7
-                                    onMoved: updatePanel(panelIndex, "panelOpacity", value)
+                                    id: opSlider; Layout.fillWidth: true; from: 0.1; to: 1.0; stepSize: 0.05
+                                    value: panelData.panelOpacity || 0.7; onMoved: updatePanel(panelIndex, "panelOpacity", value)
                                 }
-
-                                Label {
-                                    text: Math.round(opacitySlider.value * 100) + "%"
-                                    Layout.preferredWidth: 45
-                                }
+                                Label { text: Math.round(opSlider.value * 100) + "%"; Layout.preferredWidth: 45 }
                             }
-
-                            // Icon size
                             RowLayout {
                                 Kirigami.FormData.label: "Icon size:"
-                                spacing: Kirigami.Units.smallSpacing
-
                                 SpinBox {
-                                    id: iconSizeSpinBox
-                                    from: 24
-                                    to: 128
-                                    stepSize: 8
-                                    value: panelData.iconSize || 48
+                                    from: 24; to: 128; stepSize: 8; value: panelData.iconSize || 48
                                     onValueModified: updatePanel(panelIndex, "iconSize", value)
                                 }
-
-                                Label {
-                                    text: "pixels"
-                                }
+                                Label { text: "pixels" }
                             }
-
-                            // Expanded height
                             RowLayout {
                                 Kirigami.FormData.label: "Panel height:"
-                                spacing: Kirigami.Units.smallSpacing
-
                                 SpinBox {
-                                    id: heightSpinBox
-                                    from: 100
-                                    to: 500
-                                    stepSize: 25
-                                    value: panelData.expandedHeight || 250
+                                    from: 100; to: 800; stepSize: 25; value: panelData.expandedHeight || 250
                                     onValueModified: updatePanel(panelIndex, "expandedHeight", value)
                                 }
-
-                                Label {
-                                    text: "pixels"
-                                }
+                                Label { text: "pixels" }
                             }
                         }
                     }
@@ -334,29 +311,11 @@ KCM.SimpleKCM {
             }
         }
 
-        // Tips section
-        Kirigami.Separator {
-            Layout.fillWidth: true
-        }
-
-        Kirigami.Heading {
-            text: "Tips"
-            level: 4
-        }
-
-        Label {
-            text: "• Click a panel's handle bar to collapse/expand it"
-            opacity: 0.7
-        }
-
-        Label {
-            text: "• When a panel collapses, panels below slide up automatically"
-            opacity: 0.7
-        }
-
-        Label {
-            text: "• Drag files onto a panel to copy them to its folder"
-            opacity: 0.7
-        }
+        Kirigami.Separator { Layout.fillWidth: true }
+        Kirigami.Heading { text: "Tips"; level: 4 }
+        Label { text: "• Double-click a panel's handle bar to rollup/unroll"; opacity: 0.7 }
+        Label { text: "• Hover over a rolled-up panel to peek at its contents"; opacity: 0.7 }
+        Label { text: "• Double-click the widget background to hide/show all fences"; opacity: 0.7 }
+        Label { text: "• Drag the bottom of an expanded panel to resize it"; opacity: 0.7 }
     }
 }

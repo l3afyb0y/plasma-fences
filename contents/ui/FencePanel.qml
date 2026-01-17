@@ -40,7 +40,17 @@ Item {
 
     // Panel height: collapsed shows only handle, expanded shows full content
     width: parent ? parent.width : 300
-    height: isCollapsed ? handleHeight : expandedHeight
+    height: isCollapsed && !isPeeking ? handleHeight : expandedHeight
+
+    // State for "Peeking" (hovering over collapsed fence)
+    property bool isPeeking: false
+
+    // Timer for auto-rollup when mouse leaves peek area
+    Timer {
+        id: rollupTimer
+        interval: 500
+        onTriggered: fencePanel.isPeeking = false
+    }
 
     // Animate height changes for smooth collapse/expand
     Behavior on height {
@@ -127,13 +137,31 @@ Item {
                 anchors.right: parent.right
                 height: parent.radius
                 color: parent.color
-                visible: !fencePanel.isCollapsed
+                visible: !fencePanel.isCollapsed || fencePanel.isPeeking
+            }
+
+            // Title label
+            Label {
+                anchors.left: parent.left
+                anchors.leftMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                text: {
+                    var parts = targetFolderPath.split("/")
+                    return parts[parts.length - 1] || "Fence"
+                }
+                color: "white"
+                font.bold: true
+                font.pointSize: 9
+                elide: Text.ElideRight
+                width: parent.width - 60
             }
 
             // Visual indicator (small horizontal line)
             Rectangle {
-                anchors.centerIn: parent
-                width: 40
+                anchors.right: parent.right
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                width: 20
                 height: 3
                 radius: 1.5
                 color: "white"
@@ -149,8 +177,29 @@ Item {
 
                 onClicked: {
                     fencePanel.isCollapsed = !fencePanel.isCollapsed
+                    fencePanel.isPeeking = false
                     // Emit signal so parent can persist the state
                     fencePanel.collapsedChanged(fencePanel.panelIndex, fencePanel.isCollapsed)
+                }
+
+                onDoubleClicked: {
+                    // Double click to toggle rollup (Stardock style)
+                    fencePanel.isCollapsed = !fencePanel.isCollapsed
+                    fencePanel.isPeeking = false
+                    fencePanel.collapsedChanged(fencePanel.panelIndex, fencePanel.isCollapsed)
+                }
+
+                onEntered: {
+                    if (fencePanel.isCollapsed) {
+                        rollupTimer.stop()
+                        fencePanel.isPeeking = true
+                    }
+                }
+
+                onExited: {
+                    if (fencePanel.isPeeking) {
+                        rollupTimer.start()
+                    }
                 }
             }
 
@@ -184,10 +233,17 @@ Item {
 
             onEntered: function(drag) {
                 container.isDragHovering = true
+                if (fencePanel.isCollapsed) {
+                    rollupTimer.stop()
+                    fencePanel.isPeeking = true
+                }
             }
 
             onExited: {
                 container.isDragHovering = false
+                if (fencePanel.isPeeking) {
+                    rollupTimer.start()
+                }
             }
 
             onDropped: function(drop) {
@@ -209,12 +265,27 @@ Item {
                 anchors.margins: 8
                 anchors.topMargin: 4
 
-                // Hide when collapsed
-                visible: !fencePanel.isCollapsed
-                opacity: fencePanel.isCollapsed ? 0 : 1
+                // Hide when collapsed and not peeking
+                visible: !fencePanel.isCollapsed || fencePanel.isPeeking
+                opacity: visible ? 1 : 0
 
                 Behavior on opacity {
                     NumberAnimation { duration: 200 }
+                }
+
+                // MouseArea for keeping peek alive
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    propagateComposedEvents: true
+                    onEntered: {
+                        if (fencePanel.isPeeking) rollupTimer.stop()
+                    }
+                    onExited: {
+                        if (fencePanel.isPeeking) rollupTimer.start()
+                    }
+                    onClicked: (mouse) => mouse.accepted = false
+                    onPressed: (mouse) => mouse.accepted = false
                 }
 
                 // Cell size based on icon size plus padding for label

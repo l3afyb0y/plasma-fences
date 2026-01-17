@@ -3,10 +3,10 @@ import QtQuick.Controls
 import Qt.labs.platform as Platform
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.plasma5support as Plasma5Support
 import org.kde.kirigami as Kirigami
 
 // PlasmoidItem is the root type for all Plasma 6 widgets
-// This is now a multi-fence container that holds stacked FencePanel items
 PlasmoidItem {
     id: root
 
@@ -17,11 +17,19 @@ PlasmoidItem {
     readonly property int defaultIconSize: 48
     readonly property real defaultOpacity: 0.7
     readonly property int defaultExpandedHeight: 250
+    readonly property string defaultSortRules: ""
+    readonly property int defaultPageId: 0
 
-    // Handle bar height (used for height calculations)
+    // Handle bar height
     readonly property int handleHeight: 24
 
-    // Resolve the user's home path without the file:// prefix
+    // Quick-hide state
+    property bool isHidden: false
+
+    // Current page state
+    property int currentPage: Plasmoid.configuration.currentPage || 0
+
+    // Resolve the user's home path
     function homePath() {
         var home = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
         return home.startsWith("file://") ? home.substring(7) : home
@@ -32,82 +40,63 @@ PlasmoidItem {
         panel = panel || {}
         var safeFolder = panel.folderPath && panel.folderPath.length > 0 ? panel.folderPath : homePath()
         var safeOpacity = panel.panelOpacity
-        if (isNaN(safeOpacity)) {
-            safeOpacity = defaultOpacity
-        }
+        if (isNaN(safeOpacity)) safeOpacity = defaultOpacity
         safeOpacity = Math.min(1.0, Math.max(0.1, safeOpacity))
 
         var safeIconSize = parseInt(panel.iconSize)
-        if (isNaN(safeIconSize)) {
-            safeIconSize = defaultIconSize
-        }
+        if (isNaN(safeIconSize)) safeIconSize = defaultIconSize
         safeIconSize = Math.min(128, Math.max(24, safeIconSize))
 
         var safeHeight = parseInt(panel.expandedHeight)
-        if (isNaN(safeHeight)) {
-            safeHeight = defaultExpandedHeight
-        }
-        safeHeight = Math.min(500, Math.max(100, safeHeight))
+        if (isNaN(safeHeight)) safeHeight = defaultExpandedHeight
+        safeHeight = Math.min(800, Math.max(100, safeHeight))
 
         return {
             folderPath: safeFolder,
             collapsed: !!panel.collapsed,
             panelOpacity: safeOpacity,
             iconSize: safeIconSize,
-            expandedHeight: safeHeight
+            expandedHeight: safeHeight,
+            sortRules: panel.sortRules || defaultSortRules,
+            pageId: parseInt(panel.pageId) || defaultPageId
         }
     }
 
-    // Migrate legacy single-panel config into the multi-panel format
+    // Migrate legacy single-panel config
     function migrateLegacyPanel() {
         return sanitizePanelConfig({
             folderPath: Plasmoid.configuration.folderPath,
             collapsed: Plasmoid.configuration.collapsed,
             panelOpacity: Plasmoid.configuration.backgroundOpacity,
             iconSize: Plasmoid.configuration.iconSize,
-            expandedHeight: defaultExpandedHeight
+            expandedHeight: defaultExpandedHeight,
+            sortRules: "",
+            pageId: 0
         })
     }
 
-    // Grid layout configuration
-    readonly property string layoutMode: Plasmoid.configuration.layoutMode || "auto"
-    readonly property int gridColumns: Plasmoid.configuration.gridColumns || 2
+    // ListModels
+    ListModel { id: allPanelsModel }
+    ListModel { id: filteredPanelModel }
 
-    // Determine if we should use grid layout
-    readonly property bool useGridLayout: {
-        if (layoutMode === "stack") return false
-        if (layoutMode === "grid") return true
-        // Auto mode: use grid for 3+ panels
-        return panelModel.count >= 3
+    function updateFilteredModel() {
+        filteredPanelModel.clear()
+        for (var i = 0; i < allPanelsModel.count; i++) {
+            var panel = allPanelsModel.get(i)
+            if (panel.pageId === root.currentPage) {
+                var item = {}
+                for (var key in panel) item[key] = panel[key]
+                item.originalIndex = i
+                filteredPanelModel.append(item)
+            }
+        }
     }
 
-    // Calculate grid dimensions
-    readonly property int effectiveGridColumns: Math.min(gridColumns, panelModel.count)
-    readonly property int gridRows: panelModel.count === 0
-        ? 0
-        : Math.ceil(panelModel.count / Math.max(1, effectiveGridColumns))
-
-    // Grid spacing
-    readonly property int gridSpacing: 4
-
-    // Set preferred size for the widget
-    preferredRepresentation: fullRepresentation
-
-    // ListModel to hold panel configurations
-    ListModel {
-        id: panelModel
-    }
-
-    // Parse panel configs from StringList configuration
-    // Format: "folderPath|collapsed|opacity|iconSize|expandedHeight"
     function parsePanelConfigs() {
-        panelModel.clear()
-
+        allPanelsModel.clear()
         var configs = Plasmoid.configuration.panelConfigs
         if (!configs || configs.length === 0) {
-            // Default or legacy: one panel, migrated from old config when available
-            var legacyPanel = migrateLegacyPanel()
-            panelModel.append(legacyPanel)
+            allPanelsModel.append(migrateLegacyPanel())
             savePanelConfigs()
             return
         }
@@ -115,260 +104,235 @@ PlasmoidItem {
         for (var i = 0; i < configs.length; i++) {
             var parts = configs[i].split("|")
             if (parts.length >= 5) {
-                var parsedPanel = sanitizePanelConfig({
+                allPanelsModel.append(sanitizePanelConfig({
                     folderPath: parts[0],
                     collapsed: parts[1] === "true",
                     panelOpacity: parseFloat(parts[2]) || defaultOpacity,
                     iconSize: parseInt(parts[3]) || defaultIconSize,
-                    expandedHeight: parseInt(parts[4]) || defaultExpandedHeight
-                })
-                panelModel.append(parsedPanel)
+                    expandedHeight: parseInt(parts[4]) || defaultExpandedHeight,
+                    sortRules: parts[5] || "",
+                    pageId: parseInt(parts[6]) || 0
+                }))
             }
         }
-
-        // Guard against an empty model if the config data was malformed
-        if (panelModel.count === 0) {
-            panelModel.append(sanitizePanelConfig({}))
-            savePanelConfigs()
-        }
+        updateFilteredModel()
     }
 
-    // Serialize panel configs back to StringList for persistence
     function savePanelConfigs() {
         var configs = []
-        for (var i = 0; i < panelModel.count; i++) {
-            var panel = sanitizePanelConfig(panelModel.get(i))
+        for (var i = 0; i < allPanelsModel.count; i++) {
+            var panel = sanitizePanelConfig(allPanelsModel.get(i))
             configs.push(
                 panel.folderPath + "|" +
                 panel.collapsed + "|" +
                 panel.panelOpacity + "|" +
                 panel.iconSize + "|" +
-                panel.expandedHeight
+                panel.expandedHeight + "|" +
+                panel.sortRules + "|" +
+                panel.pageId
             )
         }
         Plasmoid.configuration.panelConfigs = configs
     }
 
-    // Handle collapse state change from a panel
-    function onPanelCollapsedChanged(index, collapsed) {
-        if (index >= 0 && index < panelModel.count) {
-            panelModel.setProperty(index, "collapsed", collapsed)
-            savePanelConfigs()
+    // Auto-sort
+    Timer {
+        id: sortTimer
+        interval: 10000
+        running: Plasmoid.configuration.autoSortEnabled
+        repeat: true
+        onTriggered: runAutoSort()
+    }
+
+    Plasma5Support.DataSource {
+        id: sortExecutable
+        engine: "executable"
+        connectedSources: []
+    }
+
+    function runAutoSort() {
+        var desktopPath = homePath() + "/Desktop"
+        for (var i = 0; i < allPanelsModel.count; i++) {
+            var panel = allPanelsModel.get(i)
+            if (panel.sortRules) {
+                var extensions = panel.sortRules.split(",")
+                for (var j = 0; j < extensions.length; j++) {
+                    var ext = extensions[j].trim()
+                    if (ext.length > 0) {
+                        var cmd = 'find "' + desktopPath + '" -maxdepth 1 -iname "*.' + ext + '" -exec mv -n {} "' + panel.folderPath + '/" \;'
+                        sortExecutable.connectSource(cmd)
+                    }
+                }
+            }
         }
     }
 
-    // Initialize on component completion
-    Component.onCompleted: {
-        parsePanelConfigs()
+    function onPanelCollapsedChanged(indexInFiltered, collapsed) {
+        if (indexInFiltered >= 0 && indexInFiltered < filteredPanelModel.count) {
+            var originalIndex = filteredPanelModel.get(indexInFiltered).originalIndex
+            allPanelsModel.setProperty(originalIndex, "collapsed", collapsed)
+            savePanelConfigs()
+            updateFilteredModel()
+        }
     }
 
-    // Re-parse when configuration changes externally (e.g., from config UI)
+    function onPanelResize(indexInFiltered, delta) {
+        if (indexInFiltered < 0 || indexInFiltered >= filteredPanelModel.count) return
+        var originalIndex = filteredPanelModel.get(indexInFiltered).originalIndex
+        var panel = allPanelsModel.get(originalIndex)
+        if (panel.collapsed) return
+        var newHeight = Math.max(100, Math.min(800, panel.expandedHeight + delta))
+        if (newHeight !== panel.expandedHeight) {
+            allPanelsModel.setProperty(originalIndex, "expandedHeight", newHeight)
+            savePanelConfigs()
+            updateFilteredModel()
+        }
+    }
+
+    Component.onCompleted: parsePanelConfigs()
+
     Connections {
         target: Plasmoid.configuration
-        function onPanelConfigsChanged() {
-            parsePanelConfigs()
+        function onPanelConfigsChanged() { parsePanelConfigs() }
+        function onAutoSortEnabledChanged() { sortTimer.running = Plasmoid.configuration.autoSortEnabled }
+        function onCurrentPageChanged() {
+            root.currentPage = Plasmoid.configuration.currentPage
+            updateFilteredModel()
         }
     }
 
-    // Height of resize handles between panels
+    readonly property string layoutMode: Plasmoid.configuration.layoutMode || "auto"
+    readonly property int gridColumns: Plasmoid.configuration.gridColumns || 2
+    readonly property bool useGridLayout: layoutMode === "stack" ? false : (layoutMode === "grid" ? true : filteredPanelModel.count >= 3)
+    readonly property int effectiveGridColumns: Math.min(gridColumns, filteredPanelModel.count)
+    readonly property int gridSpacing: 4
     readonly property int resizeHandleHeight: 6
 
-    // Calculate total height for stack layout (including resize handles)
-    function calculateStackHeight() {
-        var total = 0
-        for (var i = 0; i < panelModel.count; i++) {
-            var panel = panelModel.get(i)
-            total += panel.collapsed ? handleHeight : panel.expandedHeight
-            // Add resize handle height between panels (not after last)
-            if (i < panelModel.count - 1) {
-                total += resizeHandleHeight
-            }
-        }
-        return Math.max(total, handleHeight)
-    }
-
-    // Calculate height for grid layout
-    function calculateGridHeight() {
-        // Find max height for each row
-        var rowHeights = []
-        for (var i = 0; i < gridRows; i++) {
-            rowHeights.push(0)
-        }
-
-        for (var i = 0; i < panelModel.count; i++) {
-            var panel = panelModel.get(i)
-            var row = Math.floor(i / effectiveGridColumns)
-            var panelHeight = panel.collapsed ? handleHeight : panel.expandedHeight
-            rowHeights[row] = Math.max(rowHeights[row], panelHeight)
-        }
-
-        var total = 0
-        for (var i = 0; i < rowHeights.length; i++) {
-            total += rowHeights[i]
-            if (i < rowHeights.length - 1) {
-                total += gridSpacing
-            }
-        }
-        return Math.max(total, handleHeight)
-    }
-
-    // Calculate total height based on layout mode
     function calculateTotalHeight() {
-        return useGridLayout ? calculateGridHeight() : calculateStackHeight()
-    }
-
-    // Handle resize drag between panels
-    function onPanelResize(index, delta) {
-        if (index < 0 || index >= panelModel.count - 1) return
-
-        var currentPanel = panelModel.get(index)
-        var nextPanel = panelModel.get(index + 1)
-
-        // Only resize expanded panels
-        if (currentPanel.collapsed || nextPanel.collapsed) return
-
-        var newCurrentHeight = Math.max(100, Math.min(500, currentPanel.expandedHeight + delta))
-        var newNextHeight = Math.max(100, Math.min(500, nextPanel.expandedHeight - delta))
-
-        // Only apply if both are within bounds
-        if (newCurrentHeight >= 100 && newCurrentHeight <= 500 &&
-            newNextHeight >= 100 && newNextHeight <= 500) {
-            panelModel.setProperty(index, "expandedHeight", newCurrentHeight)
-            panelModel.setProperty(index + 1, "expandedHeight", newNextHeight)
+        var total = 0
+        if (useGridLayout) {
+            var rows = Math.ceil(filteredPanelModel.count / Math.max(1, effectiveGridColumns))
+            var rowHeights = []
+            for (var r=0; r<rows; r++) rowHeights.push(0)
+            for (var i=0; i<filteredPanelModel.count; i++) {
+                var p = filteredPanelModel.get(i)
+                var row = Math.floor(i / effectiveGridColumns)
+                rowHeights[row] = Math.max(rowHeights[row], p.collapsed ? handleHeight : p.expandedHeight)
+            }
+            for (var h of rowHeights) total += h
+            total += (rows - 1) * gridSpacing
+        } else {
+            for (var i=0; i<filteredPanelModel.count; i++) {
+                var p = filteredPanelModel.get(i)
+                total += p.collapsed ? handleHeight : p.expandedHeight
+                if (!p.collapsed && i < filteredPanelModel.count - 1) total += resizeHandleHeight
+            }
         }
+        if (Plasmoid.configuration.pageCount > 1) total += 24
+        return Math.max(total, handleHeight)
     }
 
-    // The full representation is what shows on the desktop
     fullRepresentation: Item {
         id: container
-
         implicitWidth: root.useGridLayout ? 300 * root.effectiveGridColumns + root.gridSpacing * (root.effectiveGridColumns - 1) : 300
         implicitHeight: calculateTotalHeight()
 
-        // Re-calculate dimensions when model or layout changes
-        Connections {
-            target: panelModel
-            function onCountChanged() {
-                container.implicitHeight = Qt.binding(function() { return calculateTotalHeight() })
-                container.implicitWidth = Qt.binding(function() {
-                    return root.useGridLayout ? 300 * root.effectiveGridColumns + root.gridSpacing * (root.effectiveGridColumns - 1) : 300
-                })
-            }
-            function onDataChanged() {
-                container.implicitHeight = Qt.binding(function() { return calculateTotalHeight() })
-            }
+        MouseArea {
+            anchors.fill: parent
+            z: -1
+            onDoubleClicked: root.isHidden = !root.isHidden
         }
 
-        // Stack layout for 1-2 panels (or when forced to stack mode)
+        opacity: root.isHidden ? 0.0 : 1.0
+        Behavior on opacity { NumberAnimation { duration: 300 } }
+
         Column {
-            id: fenceStack
             anchors.fill: parent
             spacing: 0
-            visible: !root.useGridLayout
 
-            Repeater {
-                id: stackRepeater
-                model: root.useGridLayout ? null : panelModel
+            Item {
+                width: parent.width
+                height: parent.height - (pageDots.visible ? pageDots.height : 0)
 
-                delegate: Column {
-                    width: fenceStack.width
+                Column {
+                    id: fenceStack
+                    anchors.fill: parent
                     spacing: 0
+                    visible: !root.useGridLayout
 
-                    property int delegateIndex: index
-
-                    FencePanel {
-                        id: stackPanelDelegate
-                        width: parent.width
-                        folderPath: model.folderPath
-                        panelOpacity: model.panelOpacity
-                        iconSize: model.iconSize
-                        isCollapsed: model.collapsed
-                        expandedHeight: model.expandedHeight
-                        panelIndex: delegateIndex
-
-                        onCollapsedChanged: function(idx, collapsed) {
-                            root.onPanelCollapsedChanged(idx, collapsed)
-                        }
-                    }
-
-                    // Resize handle between panels
-                    Rectangle {
-                        width: parent.width
-                        height: root.resizeHandleHeight
-                        color: "transparent"
-                        visible: delegateIndex < panelModel.count - 1 && panelModel.count > 1
-
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: 50
-                            height: 4
-                            radius: 2
-                            color: stackResizeArea.containsMouse || stackResizeArea.pressed
-                                ? Kirigami.Theme.highlightColor
-                                : Qt.rgba(1, 1, 1, 0.3)
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                        }
-
-                        MouseArea {
-                            id: stackResizeArea
-                            anchors.fill: parent
-                            cursorShape: Qt.SplitVCursor
-                            hoverEnabled: true
-                            property real startY: 0
-
-                            onPressed: function(mouse) { startY = mouse.y }
-                            onPositionChanged: function(mouse) {
-                                if (pressed) {
-                                    var delta = mouse.y - startY
-                                    root.onPanelResize(delegateIndex, delta)
-                                    startY = mouse.y
+                    Repeater {
+                        model: root.useGridLayout ? null : filteredPanelModel
+                        delegate: Column {
+                            width: fenceStack.width
+                            spacing: 0
+                            property int delegateIndex: index
+                            FencePanel {
+                                width: parent.width
+                                folderPath: model.folderPath
+                                panelOpacity: model.panelOpacity
+                                iconSize: model.iconSize
+                                isCollapsed: model.collapsed
+                                expandedHeight: model.expandedHeight
+                                panelIndex: delegateIndex
+                                onCollapsedChanged: (idx, collapsed) => root.onPanelCollapsedChanged(idx, collapsed)
+                            }
+                            Rectangle {
+                                width: parent.width; height: root.resizeHandleHeight; color: "transparent"
+                                visible: !model.collapsed
+                                Rectangle {
+                                    anchors.centerIn: parent; width: 50; height: 4; radius: 2
+                                    color: stackResizeArea.containsMouse || stackResizeArea.pressed ? Kirigami.Theme.highlightColor : Qt.rgba(1, 1, 1, 0.3)
+                                }
+                                MouseArea {
+                                    id: stackResizeArea
+                                    anchors.fill: parent; cursorShape: Qt.SplitVCursor; hoverEnabled: true
+                                    property real lastY: 0
+                                    onPressed: (mouse) => lastY = mouse.y
+                                    onPositionChanged: (mouse) => { if (pressed) { root.onPanelResize(delegateIndex, mouse.y - lastY); } }
+                                    onReleased: root.savePanelConfigs()
                                 }
                             }
-                            onReleased: root.savePanelConfigs()
+                        }
+                    }
+                }
+
+                Grid {
+                    id: fenceGrid
+                    anchors.fill: parent
+                    columns: root.effectiveGridColumns
+                    spacing: root.gridSpacing
+                    visible: root.useGridLayout
+
+                    Repeater {
+                        model: root.useGridLayout ? filteredPanelModel : null
+                        delegate: FencePanel {
+                            property int cellWidth: (container.width - root.gridSpacing * (root.effectiveGridColumns - 1)) / root.effectiveGridColumns
+                            width: cellWidth
+                            folderPath: model.folderPath
+                            panelOpacity: model.panelOpacity
+                            iconSize: model.iconSize
+                            isCollapsed: model.collapsed
+                            expandedHeight: model.expandedHeight
+                            panelIndex: index
+                            onCollapsedChanged: (idx, collapsed) => root.onPanelCollapsedChanged(idx, collapsed)
                         }
                     }
                 }
             }
-        }
 
-        // Grid layout for 3+ panels (or when forced to grid mode)
-        Grid {
-            id: fenceGrid
-            anchors.fill: parent
-            columns: root.effectiveGridColumns
-            spacing: root.gridSpacing
-            visible: root.useGridLayout
-
-            Repeater {
-                id: gridRepeater
-                model: root.useGridLayout ? panelModel : null
-
-                delegate: FencePanel {
-                    id: gridPanelDelegate
-
-                    // Calculate cell width
-                    property int cellWidth: (container.width - root.gridSpacing * (root.effectiveGridColumns - 1)) / root.effectiveGridColumns
-
-                    width: cellWidth
-                    folderPath: model.folderPath
-                    panelOpacity: model.panelOpacity
-                    iconSize: model.iconSize
-                    isCollapsed: model.collapsed
-                    expandedHeight: model.expandedHeight
-                    panelIndex: index
-
-                    onCollapsedChanged: function(idx, collapsed) {
-                        root.onPanelCollapsedChanged(idx, collapsed)
+            Row {
+                id: pageDots
+                height: 24
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 8
+                visible: Plasmoid.configuration.pageCount > 1
+                Repeater {
+                    model: Plasmoid.configuration.pageCount
+                    delegate: Rectangle {
+                        width: 8; height: 8; radius: 4
+                        color: index === root.currentPage ? Kirigami.Theme.highlightColor : Qt.rgba(1, 1, 1, 0.3)
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Plasmoid.configuration.currentPage = index }
                     }
-                }
-            }
-
-            // Animate grid layout changes
-            move: Transition {
-                NumberAnimation {
-                    properties: "x,y"
-                    duration: 250
-                    easing.type: Easing.OutCubic
                 }
             }
         }

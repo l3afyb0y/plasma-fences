@@ -190,13 +190,18 @@ Item {
             width: parent.width
 
             text: iconDelegate.fileName
-            color: Kirigami.Theme.textColor
+            color: "white" // Force white text for classic desktop look
+
+            // Drop shadow for readability
+            style: Text.Outline
+            styleColor: "black"
 
             // Truncate long names with ellipsis
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
 
-            font.pixelSize: 11
+            font.pixelSize: 10
+            font.bold: false
             maximumLineCount: 2
             wrapMode: Text.WrapAtWordBoundaryOrAnywhere
         }

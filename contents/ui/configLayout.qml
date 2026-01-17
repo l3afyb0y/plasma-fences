@@ -11,6 +11,7 @@ KCM.SimpleKCM {
     // Configuration bindings
     property alias cfg_layoutMode: layoutModeCombo.currentValue
     property alias cfg_gridColumns: gridColumnsSpinBox.value
+    property alias cfg_pageCount: pageCountSpinBox.value
     property var cfg_panelConfigs: []
 
     // Internal panel list for preview
@@ -20,6 +21,7 @@ KCM.SimpleKCM {
     readonly property real defaultOpacity: 0.7
     readonly property int defaultIconSize: 48
     readonly property int defaultExpandedHeight: 250
+    readonly property int defaultPageId: 0
 
     // Resolve the user's home path without the file:// prefix
     function homePath() {
@@ -48,14 +50,16 @@ KCM.SimpleKCM {
         if (isNaN(safeHeight)) {
             safeHeight = defaultExpandedHeight
         }
-        safeHeight = Math.min(500, Math.max(100, safeHeight))
+        safeHeight = Math.min(800, Math.max(100, safeHeight))
 
         return {
             folderPath: safeFolder,
             collapsed: !!panel.collapsed,
             panelOpacity: safeOpacity,
             iconSize: safeIconSize,
-            expandedHeight: safeHeight
+            expandedHeight: safeHeight,
+            sortRules: panel.sortRules || "",
+            pageId: parseInt(panel.pageId) || defaultPageId
         }
     }
 
@@ -67,7 +71,9 @@ KCM.SimpleKCM {
             collapsed: hasPlasmoidConfig ? plasmoid.configuration.collapsed : false,
             panelOpacity: hasPlasmoidConfig ? plasmoid.configuration.backgroundOpacity : defaultOpacity,
             iconSize: hasPlasmoidConfig ? plasmoid.configuration.iconSize : defaultIconSize,
-            expandedHeight: defaultExpandedHeight
+            expandedHeight: defaultExpandedHeight,
+            sortRules: "",
+            pageId: 0
         })
     }
 
@@ -77,7 +83,9 @@ KCM.SimpleKCM {
                 safePanel.collapsed + "|" +
                 safePanel.panelOpacity + "|" +
                 safePanel.iconSize + "|" +
-                safePanel.expandedHeight
+                safePanel.expandedHeight + "|" +
+                safePanel.sortRules + "|" +
+                safePanel.pageId
     }
 
     Component.onCompleted: {
@@ -103,7 +111,9 @@ KCM.SimpleKCM {
                         collapsed: parts.length >= 2 ? parts[1] === "true" : false,
                         panelOpacity: parts.length >= 3 ? parseFloat(parts[2]) : defaultOpacity,
                         iconSize: parts.length >= 4 ? parseInt(parts[3]) : defaultIconSize,
-                        expandedHeight: parts.length >= 5 ? parseInt(parts[4]) : defaultExpandedHeight
+                        expandedHeight: parts.length >= 5 ? parseInt(parts[4]) : defaultExpandedHeight,
+                        sortRules: parts.length >= 6 ? parts[5] : "",
+                        pageId: parts.length >= 7 ? parseInt(parts[6]) : 0
                     }))
                 }
             }
@@ -167,6 +177,15 @@ KCM.SimpleKCM {
                 value: 2
 
                 enabled: cfg_layoutMode !== "stack"
+            }
+
+            SpinBox {
+                id: pageCountSpinBox
+                Kirigami.FormData.label: "Desktop pages:"
+
+                from: 1
+                to: 5
+                value: 1
             }
         }
 

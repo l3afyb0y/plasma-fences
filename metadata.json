@@ -10,7 +10,7 @@
             }
         ],
         "Category": "Utilities",
-        "Version": "0.3.1"
+        "Version": "0.4.0"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
     "X-Plasma-MainScript": "ui/main.qml"
