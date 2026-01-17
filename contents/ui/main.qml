@@ -83,34 +83,6 @@ PlasmoidItem {
     ListModel { id: filteredPanelModel }
 
     // Enhanced updateFilteredModel to support both legacy and advanced page systems
-    function updateFilteredModel() {
-        filteredPanelModel.clear()
-        for (var i = 0; i < allPanelsModel.count; i++) {
-            var panel = allPanelsModel.get(i)
-            var shouldShow = false
-            
-            if (usingAdvancedPages) {
-                // Advanced page system: check if panel is in current page
-                if (pagesConfig && pagesConfig.pages) {
-                    var currentPage = getCurrentPage()
-                    if (currentPage && currentPage.panelIds) {
-                        shouldShow = currentPage.panelIds.includes(getPanelIdForIndex(i))
-                    }
-                }
-            } else {
-                // Legacy page system
-                shouldShow = panel.pageId === root.currentPage
-            }
-            
-            if (shouldShow) {
-                var item = {}
-                for (var key in panel) item[key] = panel[key]
-                item.originalIndex = i
-                filteredPanelModel.append(item)
-            }
-        }
-    }
-
     function parsePanelConfigs() {
         allPanelsModel.clear()
         var configs = Plasmoid.configuration.panelConfigs
