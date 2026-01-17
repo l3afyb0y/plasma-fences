@@ -24,6 +24,16 @@
             <default>1</default>
         </entry>
 
+        <!-- Advanced page configuration (JSON format) -->
+        <entry name="advancedPageConfig" type="String">
+            <default></default>
+        </entry>
+
+        <!-- Page configuration version for migration tracking -->
+        <entry name="pageConfigVersion" type="Int">
+            <default>0</default>
+        </entry>
+
         <entry name="snapshots" type="StringList">
             <default></default>
         </entry>

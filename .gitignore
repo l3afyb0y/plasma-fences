@@ -12,3 +12,7 @@ CLAUDE.md
 # OS files
 .DS_Store
 Thumbs.db
+
+# Implementation planning
+PLAN.md
+/test_advanced_features.js

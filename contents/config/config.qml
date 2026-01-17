@@ -8,6 +8,11 @@ ConfigModel {
         source: "configGeneral.qml"
     }
     ConfigCategory {
+        name: "Pages"
+        icon: "folder"
+        source: "configPages.qml"
+    }
+    ConfigCategory {
         name: "Layout"
         icon: "view-grid"
         source: "configLayout.qml"

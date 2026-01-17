@@ -275,11 +275,57 @@ KCM.SimpleKCM {
                             }
                             RowLayout {
                                 Kirigami.FormData.label: "Desktop Page:"
-                                SpinBox {
-                                    from: 1; to: 5; value: (panelData.pageId || 0) + 1
-                                    onValueModified: updatePanel(panelIndex, "pageId", value - 1)
+                                ComboBox {
+                                    id: pageCombo
+                                    Layout.fillWidth: true
+                                    
+                                    // Determine available pages based on system
+                                    property var pageOptions: []
+                                    
+                                    Component.onCompleted: {
+                                        // Check if we have advanced page config
+                                        var configVersion = plasmoid ? (plasmoid.configuration.pageConfigVersion || 0) : 0
+                                        
+                                        if (configVersion === 1 && plasmoid.configuration.advancedPageConfig) {
+                                            try {
+                                                var pageConfig = JSON.parse(plasmoid.configuration.advancedPageConfig)
+                                                pageOptions = pageConfig.pages || []
+                                            } catch (e) {
+                                                console.error("Error parsing page config:", e)
+                                                // Fall back to legacy
+                                                for (var i = 1; i <= 5; i++) {
+                                                    pageOptions.push({id: "page-" + (i-1), name: "Page " + i})
+                                                }
+                                            }
+                                        } else {
+                                            // Legacy system - use page count
+                                            var pageCount = plasmoid ? plasmoid.configuration.pageCount : 1
+                                            for (var i = 1; i <= pageCount; i++) {
+                                                pageOptions.push({id: "page-" + (i-1), name: "Page " + i})
+                                            }
+                                        }
+                                        
+                                        // Set current value
+                                        var currentPageId = "page-" + (panelData.pageId || 0)
+                                        for (var j = 0; j < pageOptions.length; j++) {
+                                            if (pageOptions[j].id === currentPageId) {
+                                                currentIndex = j
+                                                break
+                                            }
+                                        }
+                                    }
+                                    
+                                    textRole: "name"
+                                    onCurrentIndexChanged: {
+                                        if (currentIndex >= 0 && currentIndex < pageOptions.length) {
+                                            // Find the page ID (e.g., "page-0", "page-1")
+                                            var selectedPageId = pageOptions[currentIndex].id
+                                            var pageId = parseInt(selectedPageId.split("-")[1])
+                                            updatePanel(panelIndex, "pageId", pageId)
+                                        }
+                                    }
                                 }
-                                Label { text: "Index" }
+                                Label { text: "Page" }
                             }
                             RowLayout {
                                 Kirigami.FormData.label: "Opacity:"

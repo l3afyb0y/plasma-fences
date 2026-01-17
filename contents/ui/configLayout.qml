@@ -186,6 +186,15 @@ KCM.SimpleKCM {
                 from: 1
                 to: 5
                 value: 1
+                
+                // Disable when using advanced page system
+                Component.onCompleted: {
+                    var configVersion = plasmoid ? (plasmoid.configuration.pageConfigVersion || 0) : 0
+                    if (configVersion === 1 && plasmoid.configuration.advancedPageConfig.length > 0) {
+                        enabled = false
+                        tooltip = "Page management is handled in the 'Pages' tab when using advanced pages"
+                    }
+                }
             }
         }
 
