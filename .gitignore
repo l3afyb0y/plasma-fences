@@ -16,3 +16,5 @@ Thumbs.db
 # Implementation planning
 PLAN.md
 /test_advanced_features.js
+/install_kde_hybrid.sh
+/hyprland-kde-hybrid.conf
