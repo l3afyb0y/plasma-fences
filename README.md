@@ -41,6 +41,18 @@ cd plasma-fences
 kpackagetool6 -t Plasma/Applet -i .
 ```
 
+### Updating/Reinstalling
+To update or reinstall Plasma Fences:
+```bash
+# Safely uninstall (preserves your configuration)
+./uninstall.sh
+
+# Then reinstall
+./install.sh
+```
+
+See [README-UNINSTALL.md](README-UNINSTALL.md) for detailed information about the uninstall process and data safety.
+
 ## Usage
 
 1. **Add the Widget**: Right-click your desktop, select "Add Widgets", and search for "Fences".
