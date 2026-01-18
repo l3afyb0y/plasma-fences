@@ -7,6 +7,11 @@ A desktop organization widget for KDE Plasma 6, inspired by Stardock Fences. It 
 ![Wayland](https://img.shields.io/badge/Wayland-compatible-brightgreen)
 ![Version](https://img.shields.io/badge/version-0.4.0-orange)
 
+		**IMPORTANT** 
+Last I checked, this project is not working correctly anymore. I need to take some time with it and sift through for a fix, but I have other projects that need some fixes first. 
+Feel free to submit pull requests if you find a solution to the issue for me, and I will merge a working version and update the repo.
+
+
 ## Features
 
 - **Multi-Panel Support**: Create multiple containers within a single widget.
