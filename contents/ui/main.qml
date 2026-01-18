@@ -25,6 +25,13 @@ PlasmoidItem {
 
     // Quick-hide state
     property bool isHidden: false
+    
+    // Mouse tracking for auto-hiding
+    property bool mouseInside: false
+    
+    // Auto-hiding configuration
+    property bool autoHideEnabled: Plasmoid.configuration.autoHideEnabled || false
+    property bool hideOnFullscreen: Plasmoid.configuration.hideOnFullscreen || true
 
     // Current page state (legacy and advanced)
     property int currentPage: Plasmoid.configuration.currentPage || 0
@@ -37,7 +44,7 @@ PlasmoidItem {
         var home = Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString()
         return home.startsWith("file://") ? home.substring(7) : home
     }
-
+    
     // Clamp and sanitize a panel configuration object
     function sanitizePanelConfig(panel) {
         panel = panel || {}
@@ -82,7 +89,37 @@ PlasmoidItem {
     ListModel { id: allPanelsModel }
     ListModel { id: filteredPanelModel }
 
-    // Enhanced updateFilteredModel to support both legacy and advanced page systems
+    // Update filtered model to show only panels for the current page
+    function updateFilteredModel() {
+        filteredPanelModel.clear()
+        
+        for (var i = 0; i < allPanelsModel.count; i++) {
+            var panel = allPanelsModel.get(i)
+            var shouldShow = false
+            
+            // Check if panel should be shown based on page
+            if (usingAdvancedPages) {
+                // Advanced page system: check if panel is in current page
+                if (pagesConfig && pagesConfig.pages) {
+                    var currentPage = getCurrentPage()
+                    if (currentPage && currentPage.panelIds) {
+                        shouldShow = currentPage.panelIds.includes(getPanelIdForIndex(i))
+                    }
+                }
+            } else {
+                // Legacy page system
+                shouldShow = panel.pageId === root.currentPage
+            }
+            
+            if (shouldShow) {
+                var item = {}
+                for (var key in panel) item[key] = panel[key]
+                item.originalIndex = i
+                filteredPanelModel.append(item)
+            }
+        }
+    }
+
     function parsePanelConfigs() {
         allPanelsModel.clear()
         var configs = Plasmoid.configuration.panelConfigs
@@ -215,8 +252,6 @@ PlasmoidItem {
         Plasmoid.configuration.pageConfigVersion = 1
         usingAdvancedPages = true
         currentPageId = newConfig.currentPageId
-        
-        console.log("Migration completed successfully")
     }
 
     // Initialize default advanced page configuration
@@ -363,336 +398,6 @@ PlasmoidItem {
             }
         }
         return false
-    }
-
-    // ========== Smart Panel Placement Algorithms ==========
-    
-    // Analyze desktop content and suggest optimal panel organization
-    function analyzeDesktopContent() {
-        var desktopPath = homePath() + "/Desktop"
-        var analysis = {
-            fileTypes: {},
-            fileCount: 0,
-            folderCount: 0,
-            totalSize: 0,
-            extensions: {},
-            categories: {}
-        }
-        
-        // This would be implemented with actual file system scanning
-        // For now, return a mock analysis
-        return {
-            fileTypes: {
-                "Documents": 42,
-                "Images": 18,
-                "Videos": 8,
-                "Music": 12,
-                "Applications": 6,
-                "Archives": 4,
-                "Other": 10
-            },
-            fileCount: 100,
-            folderCount: 15,
-            totalSize: 124567890, // bytes
-            extensions: {
-                "pdf": 12,
-                "docx": 8,
-                "txt": 6,
-                "jpg": 10,
-                "png": 8,
-                "mp4": 6,
-                "mp3": 10,
-                "zip": 4
-            },
-            categories: {
-                "Work": 35,
-                "Personal": 25,
-                "Projects": 20,
-                "Media": 15,
-                "Misc": 5
-            }
-        }
-    }
-    
-    // Generate smart panel suggestions based on desktop analysis
-    function generateSmartPanelSuggestions() {
-        var analysis = analyzeDesktopContent()
-        var suggestions = []
-        
-        // Suggest panels for major file types
-        var majorTypes = Object.keys(analysis.fileTypes)
-            .sort((a, b) => analysis.fileTypes[b] - analysis.fileTypes[a])
-            .slice(0, 3)
-        
-        for (var i = 0; i < majorTypes.length; i++) {
-            var type = majorTypes[i]
-            suggestions.push({
-                name: type + " Panel",
-                folderPath: homePath() + "/Desktop/" + type,
-                description: "For " + analysis.fileTypes[type] + " " + type.toLowerCase() + " files",
-                icon: getIconForType(type),
-                sortRules: getSortRulesForType(type)
-            })
-        }
-        
-        // Suggest panels for major extensions
-        var majorExtensions = Object.keys(analysis.extensions)
-            .sort((a, b) => analysis.extensions[b] - analysis.extensions[a])
-            .slice(0, 2)
-        
-        for (var i = 0; i < majorExtensions.length; i++) {
-            var ext = majorExtensions[i]
-            suggestions.push({
-                name: ext.toUpperCase() + " Files",
-                folderPath: homePath() + "/Desktop/" + ext.toUpperCase(),
-                description: "For " + analysis.extensions[ext] + " ." + ext + " files",
-                icon: getIconForExtension(ext),
-                sortRules: ext
-            })
-        }
-        
-        return suggestions
-    }
-    
-    // Get appropriate icon for file type
-    function getIconForType(type) {
-        var icons = {
-            "Documents": "document",
-            "Images": "image",
-            "Videos": "video",
-            "Music": "audio",
-            "Applications": "application",
-            "Archives": "archive",
-            "Other": "folder"
-        }
-        return icons[type] || "folder"
-    }
-    
-    // Get appropriate icon for file extension
-    function getIconForExtension(ext) {
-        var icons = {
-            "pdf": "application-pdf",
-            "docx": "x-office-document",
-            "txt": "text-plain",
-            "jpg": "image-jpeg",
-            "png": "image-png",
-            "mp4": "video-x-generic",
-            "mp3": "audio-x-generic",
-            "zip": "application-zip"
-        }
-        return icons[ext] || "document"
-    }
-    
-    // Get sort rules for file type
-    function getSortRulesForType(type) {
-        var rules = {
-            "Documents": "pdf,docx,txt,odt",
-            "Images": "jpg,png,gif,bmp",
-            "Videos": "mp4,avi,mkv,mov",
-            "Music": "mp3,wav,flac,ogg",
-            "Applications": "exe,sh,bin,app",
-            "Archives": "zip,rar,7z,tar",
-            "Other": ""
-        }
-        return rules[type] || ""
-    }
-    
-    // Auto-organize panels based on smart analysis
-    function autoOrganizePanels() {
-        var suggestions = generateSmartPanelSuggestions()
-        
-        // Create new panels for suggestions
-        for (var i = 0; i < suggestions.length; i++) {
-            var suggestion = suggestions[i]
-            
-            // Check if panel already exists
-            var exists = false
-            for (var j = 0; j < allPanelsModel.count; j++) {
-                var panel = allPanelsModel.get(j)
-                if (panel.folderPath === suggestion.folderPath) {
-                    exists = true
-                    break
-                }
-            }
-            
-            if (!exists) {
-                allPanelsModel.append({
-                    folderPath: suggestion.folderPath,
-                    collapsed: false,
-                    panelOpacity: defaultOpacity,
-                    iconSize: defaultIconSize,
-                    expandedHeight: defaultExpandedHeight,
-                    sortRules: suggestion.sortRules,
-                    pageId: 0
-                })
-            }
-        }
-        
-        savePanelConfigs()
-        updateFilteredModel()
-        return suggestions.length
-    }
-    
-    // Optimize panel layout based on usage patterns
-    function optimizePanelLayout() {
-        // This would analyze usage patterns and rearrange panels
-        // For now, just sort by folder path
-        
-        var panels = []
-        for (var i = 0; i < allPanelsModel.count; i++) {
-            panels.push(allPanelsModel.get(i))
-        }
-        
-        // Sort panels by folder path (alphabetically)
-        panels.sort(function(a, b) {
-            return a.folderPath.localeCompare(b.folderPath)
-        })
-        
-        // Rebuild model with sorted panels
-        allPanelsModel.clear()
-        for (var i = 0; i < panels.length; i++) {
-            allPanelsModel.append(panels[i])
-        }
-        
-        savePanelConfigs()
-        updateFilteredModel()
-    }
-
-    // ========== Search Functionality ==========
-    
-    // Search across all panels and pages
-    property string currentSearchQuery: ""
-    property bool searchActive: false
-    
-    function performSearch(query) {
-        currentSearchQuery = query || ""
-        searchActive = query && query.length > 0
-        updateFilteredModel()
-        return searchActive
-    }
-    
-    function clearSearch() {
-        currentSearchQuery = ""
-        searchActive = false
-        updateFilteredModel()
-    }
-    
-    // Enhanced updateFilteredModel to support search
-    function updateFilteredModel() {
-        filteredPanelModel.clear()
-        
-        for (var i = 0; i < allPanelsModel.count; i++) {
-            var panel = allPanelsModel.get(i)
-            var shouldShow = false
-            
-            // First check if panel should be shown based on page
-            if (usingAdvancedPages) {
-                // Advanced page system: check if panel is in current page
-                if (pagesConfig && pagesConfig.pages) {
-                    var currentPage = getCurrentPage()
-                    if (currentPage && currentPage.panelIds) {
-                        shouldShow = currentPage.panelIds.includes(getPanelIdForIndex(i))
-                    }
-                }
-            } else {
-                // Legacy page system
-                shouldShow = panel.pageId === root.currentPage
-            }
-            
-            // If search is active, also check if panel matches search query
-            if (searchActive && shouldShow) {
-                var query = currentSearchQuery.toLowerCase()
-                var folderPath = panel.folderPath.toLowerCase()
-                
-                shouldShow = folderPath.includes(query) || 
-                           panel.sortRules.toLowerCase().includes(query)
-            }
-            
-            if (shouldShow) {
-                var item = {}
-                for (var key in panel) item[key] = panel[key]
-                item.originalIndex = i
-                filteredPanelModel.append(item)
-            }
-        }
-    }
-    
-    // Search for files across all pages
-    function searchFilesAcrossPages(query) {
-        if (!query || query.length === 0) return []
-        
-        var results = []
-        var searchQuery = query.toLowerCase()
-        
-        // Search through all panels
-        for (var i = 0; i < allPanelsModel.count; i++) {
-            var panel = allPanelsModel.get(i)
-            
-            // Check if panel folder path matches
-            if (panel.folderPath.toLowerCase().includes(searchQuery)) {
-                results.push({
-                    type: "panel",
-                    panelId: getPanelIdForIndex(i),
-                    panelName: "Panel " + (i + 1),
-                    folderPath: panel.folderPath,
-                    pageId: usingAdvancedPages ? findPageForPanel(getPanelIdForIndex(i)) : panel.pageId
-                })
-            }
-        }
-        
-        // If using advanced pages, search through page names too
-        if (usingAdvancedPages && pagesConfig && pagesConfig.pages) {
-            for (var i = 0; i < pagesConfig.pages.length; i++) {
-                var page = pagesConfig.pages[i]
-                if (page.name.toLowerCase().includes(searchQuery)) {
-                    results.push({
-                        type: "page",
-                        pageId: page.id,
-                        pageName: page.name,
-                        panelCount: page.panelIds ? page.panelIds.length : 0
-                    })
-                }
-            }
-        }
-        
-        return results
-    }
-    
-    // Find which page a panel belongs to
-    function findPageForPanel(panelId) {
-        if (!pagesConfig || !pagesConfig.pages) return null
-        
-        for (var i = 0; i < pagesConfig.pages.length; i++) {
-            var page = pagesConfig.pages[i]
-            if (page.panelIds && page.panelIds.includes(panelId)) {
-                return page.id
-            }
-        }
-        return null
-    }
-    
-    // Advanced search with filters
-    function advancedSearch(query, filters) {
-        filters = filters || {}
-        var results = searchFilesAcrossPages(query)
-        
-        // Apply filters
-        if (filters.fileTypes && filters.fileTypes.length > 0) {
-            results = results.filter(function(result) {
-                // This would be enhanced with actual file type detection
-                return true
-            })
-        }
-        
-        if (filters.dateRange) {
-            // This would filter by date range
-        }
-        
-        if (filters.sizeRange) {
-            // This would filter by file size
-        }
-        
-        return results
     }
 
     // ========== Bulk Operations Tools ==========
@@ -914,8 +619,6 @@ PlasmoidItem {
         }
     }
 
-    // ========== Animation and Transition Effects ==========
-    
     // Page transition animation types
     readonly property var transitionAnimations: {
         "none": "No Animation",
@@ -943,82 +646,6 @@ PlasmoidItem {
         Plasmoid.configuration.advancedPageConfig = JSON.stringify(pagesConfig)
         
         return true
-    }
-    
-    // Animate page transition
-    function animatePageTransition(oldPageId, newPageId) {
-        var animationType = getCurrentTransitionAnimation()
-        
-        // Trigger different animations based on type
-        switch (animationType) {
-            case "slide":
-                return animateSlideTransition(oldPageId, newPageId)
-            case "fade":
-                return animateFadeTransition(oldPageId, newPageId)
-            case "zoom":
-                return animateZoomTransition(oldPageId, newPageId)
-            case "flip":
-                return animateFlipTransition(oldPageId, newPageId)
-            default:
-                return animateSlideTransition(oldPageId, newPageId)
-        }
-    }
-    
-    // Slide animation
-    function animateSlideTransition(oldPageId, newPageId) {
-        // This would be implemented with actual animation logic
-        // For now, just return true to indicate success
-        return true
-    }
-    
-    // Fade animation
-    function animateFadeTransition(oldPageId, newPageId) {
-        // This would be implemented with actual animation logic
-        return true
-    }
-    
-    // Zoom animation
-    function animateZoomTransition(oldPageId, newPageId) {
-        // This would be implemented with actual animation logic
-        return true
-    }
-    
-    // Flip animation
-    function animateFlipTransition(oldPageId, newPageId) {
-        // This would be implemented with actual animation logic
-        return true
-    }
-    
-    // Animate panel appearance
-    function animatePanelAppearance(panelIndex, animationType) {
-        animationType = animationType || "fade"
-        
-        // This would be implemented with actual animation logic
-        // For now, just return true
-        return true
-    }
-    
-    // Animate panel removal
-    function animatePanelRemoval(panelIndex, animationType) {
-        animationType = animationType || "fade"
-        
-        // This would be implemented with actual animation logic
-        return true
-    }
-    
-    // Enhanced navigateToPage with animation
-    function navigateToPageWithAnimation(pageId) {
-        var currentPage = getCurrentPage()
-        if (currentPage && currentPage.id === pageId) return false
-        
-        var oldPageId = currentPageId
-        var result = navigateToPage(pageId)
-        
-        if (result) {
-            animatePageTransition(oldPageId, pageId)
-        }
-        
-        return result
     }
     
     // Animation settings
@@ -1060,264 +687,6 @@ PlasmoidItem {
         Plasmoid.configuration.advancedPageConfig = JSON.stringify(pagesConfig)
         
         return true
-    }
-
-    // ========== Advanced Filtering Options ==========
-    
-    // Filter panels by various criteria
-    function filterPanelsByCriteria(criteria) {
-        criteria = criteria || {}
-        var filteredIndices = []
-        
-        for (var i = 0; i < allPanelsModel.count; i++) {
-            var panel = allPanelsModel.get(i)
-            var matches = true
-            
-            // Filter by folder path pattern
-            if (criteria.folderPattern && criteria.folderPattern.length > 0) {
-                var pattern = criteria.folderPattern.toLowerCase()
-                matches = matches && panel.folderPath.toLowerCase().includes(pattern)
-            }
-            
-            // Filter by sort rules
-            if (criteria.sortRules && criteria.sortRules.length > 0) {
-                var rules = criteria.sortRules.toLowerCase()
-                matches = matches && panel.sortRules.toLowerCase().includes(rules)
-            }
-            
-            // Filter by opacity range
-            if (criteria.opacityRange) {
-                var minOpacity = criteria.opacityRange.min || 0
-                var maxOpacity = criteria.opacityRange.max || 1
-                matches = matches && panel.panelOpacity >= minOpacity && panel.panelOpacity <= maxOpacity
-            }
-            
-            // Filter by icon size range
-            if (criteria.iconSizeRange) {
-                var minSize = criteria.iconSizeRange.min || 0
-                var maxSize = criteria.iconSizeRange.max || 200
-                matches = matches && panel.iconSize >= minSize && panel.iconSize <= maxSize
-            }
-            
-            // Filter by height range
-            if (criteria.heightRange) {
-                var minHeight = criteria.heightRange.min || 0
-                var maxHeight = criteria.heightRange.max || 1000
-                matches = matches && panel.expandedHeight >= minHeight && panel.expandedHeight <= maxHeight
-            }
-            
-            // Filter by collapsed state
-            if (criteria.collapsedState !== undefined) {
-                matches = matches && panel.collapsed === criteria.collapsedState
-            }
-            
-            // Filter by page assignment
-            if (criteria.pageId) {
-                if (usingAdvancedPages) {
-                    var panelId = getPanelIdForIndex(i)
-                    var pageId = findPageForPanel(panelId)
-                    matches = matches && pageId === criteria.pageId
-                } else {
-                    matches = matches && panel.pageId === criteria.pageId
-                }
-            }
-            
-            if (matches) {
-                filteredIndices.push(i)
-            }
-        }
-        
-        return filteredIndices
-    }
-    
-    // Apply advanced filtering to current view
-    function applyAdvancedFiltering(criteria) {
-        var filteredIndices = filterPanelsByCriteria(criteria)
-        
-        // Create a temporary filtered model
-        var tempFilteredModel = []
-        for (var i = 0; i < filteredIndices.length; i++) {
-            var originalIndex = filteredIndices[i]
-            var panel = allPanelsModel.get(originalIndex)
-            
-            // Also check if panel should be shown based on current page
-            var shouldShowOnPage = false
-            if (usingAdvancedPages) {
-                var currentPage = getCurrentPage()
-                if (currentPage && currentPage.panelIds) {
-                    shouldShowOnPage = currentPage.panelIds.includes(getPanelIdForIndex(originalIndex))
-                }
-            } else {
-                shouldShowOnPage = panel.pageId === root.currentPage
-            }
-            
-            if (shouldShowOnPage) {
-                var item = {}
-                for (var key in panel) item[key] = panel[key]
-                item.originalIndex = originalIndex
-                tempFilteredModel.push(item)
-            }
-        }
-        
-        // Update the filtered model
-        filteredPanelModel.clear()
-        for (var i = 0; i < tempFilteredModel.length; i++) {
-            filteredPanelModel.append(tempFilteredModel[i])
-        }
-        
-        return tempFilteredModel.length
-    }
-    
-    // Clear advanced filtering
-    function clearAdvancedFiltering() {
-        updateFilteredModel()
-    }
-    
-    // Get available filter criteria options
-    function getFilterCriteriaOptions() {
-        var options = {
-            folderPatterns: [],
-            sortRules: [],
-            pageOptions: [],
-            opacityRanges: [
-                {min: 0, max: 0.3, label: "Low (0-30%)"},
-                {min: 0.3, max: 0.6, label: "Medium (30-60%)"},
-                {min: 0.6, max: 1.0, label: "High (60-100%)"}
-            ],
-            iconSizeRanges: [
-                {min: 24, max: 48, label: "Small (24-48px)"},
-                {min: 48, max: 72, label: "Medium (48-72px)"},
-                {min: 72, max: 128, label: "Large (72-128px)"}
-            ],
-            heightRanges: [
-                {min: 100, max: 250, label: "Small (100-250px)"},
-                {min: 250, max: 500, label: "Medium (250-500px)"},
-                {min: 500, max: 800, label: "Large (500-800px)"}
-            ]
-        }
-        
-        // Collect unique folder patterns
-        var folderPatterns = {}
-        for (var i = 0; i < allPanelsModel.count; i++) {
-            var panel = allPanelsModel.get(i)
-            var folder = panel.folderPath
-            if (!folderPatterns[folder]) {
-                folderPatterns[folder] = true
-                options.folderPatterns.push({
-                    value: folder,
-                    label: folder.replace(homePath(), "~")
-                })
-            }
-        }
-        
-        // Collect unique sort rules
-        var sortRules = {}
-        for (var i = 0; i < allPanelsModel.count; i++) {
-            var panel = allPanelsModel.get(i)
-            if (panel.sortRules && panel.sortRules.length > 0) {
-                var rules = panel.sortRules.split(",")[0] // Take first rule
-                if (!sortRules[rules]) {
-                    sortRules[rules] = true
-                    options.sortRules.push({
-                        value: rules,
-                        label: rules + " files"
-                    })
-                }
-            }
-        }
-        
-        // Collect page options
-        if (usingAdvancedPages && pagesConfig && pagesConfig.pages) {
-            for (var i = 0; i < pagesConfig.pages.length; i++) {
-                var page = pagesConfig.pages[i]
-                options.pageOptions.push({
-                    value: page.id,
-                    label: page.name || "Page " + (i + 1)
-                })
-            }
-        } else {
-            var legacyPageCount = Plasmoid.configuration.pageCount || 1
-            for (var i = 0; i < legacyPageCount; i++) {
-                options.pageOptions.push({
-                    value: i,
-                    label: "Page " + (i + 1)
-                })
-            }
-        }
-        
-        return options
-    }
-    
-    // Create filter preset
-    function createFilterPreset(name, criteria) {
-        if (!usingAdvancedPages) return false
-        
-        if (!pagesConfig.filterPresets) {
-            pagesConfig.filterPresets = []
-        }
-        
-        pagesConfig.filterPresets.push({
-            id: "preset-" + pagesConfig.filterPresets.length,
-            name: name,
-            criteria: criteria,
-            created: new Date().toISOString()
-        })
-        
-        pagesConfig.metadata.modified = new Date().toISOString()
-        Plasmoid.configuration.advancedPageConfig = JSON.stringify(pagesConfig)
-        
-        return true
-    }
-    
-    // Apply filter preset
-    function applyFilterPreset(presetId) {
-        if (!usingAdvancedPages || !pagesConfig || !pagesConfig.filterPresets) return 0
-        
-        var preset = null
-        for (var i = 0; i < pagesConfig.filterPresets.length; i++) {
-            if (pagesConfig.filterPresets[i].id === presetId) {
-                preset = pagesConfig.filterPresets[i]
-                break
-            }
-        }
-        
-        if (preset) {
-            return applyAdvancedFiltering(preset.criteria)
-        }
-        
-        return 0
-    }
-    
-    // Delete filter preset
-    function deleteFilterPreset(presetId) {
-        if (!usingAdvancedPages || !pagesConfig || !pagesConfig.filterPresets) return false
-        
-        var newPresets = []
-        var found = false
-        for (var i = 0; i < pagesConfig.filterPresets.length; i++) {
-            if (pagesConfig.filterPresets[i].id !== presetId) {
-                newPresets.push(pagesConfig.filterPresets[i])
-            } else {
-                found = true
-            }
-        }
-        
-        if (found) {
-            pagesConfig.filterPresets = newPresets
-            pagesConfig.metadata.modified = new Date().toISOString()
-            Plasmoid.configuration.advancedPageConfig = JSON.stringify(pagesConfig)
-            return true
-        }
-        
-        return false
-    }
-    
-    // Get all filter presets
-    function getFilterPresets() {
-        if (usingAdvancedPages && pagesConfig && pagesConfig.filterPresets) {
-            return pagesConfig.filterPresets
-        }
-        return []
     }
 
     // Auto-sort
@@ -1407,6 +776,12 @@ PlasmoidItem {
             initializeAdvancedPages()
             updateFilteredModel()
         }
+        function onAutoHideEnabledChanged() {
+            root.autoHideEnabled = Plasmoid.configuration.autoHideEnabled
+        }
+        function onHideOnFullscreenChanged() {
+            root.hideOnFullscreen = Plasmoid.configuration.hideOnFullscreen
+        }
     }
 
     readonly property string layoutMode: Plasmoid.configuration.layoutMode || "auto"
@@ -1447,15 +822,67 @@ PlasmoidItem {
         id: container
         implicitWidth: root.useGridLayout ? 300 * root.effectiveGridColumns + root.gridSpacing * (root.effectiveGridColumns - 1) : 300
         implicitHeight: calculateTotalHeight()
+        
+        // Enable GPU acceleration for the entire container
+        layer.enabled: true
+        layer.smooth: true
+        layer.effect: OpacityMask {
+            maskSource: Rectangle {
+                width: container.width
+                height: container.height
+            }
+        }
 
         MouseArea {
+            id: mainMouseArea
             anchors.fill: parent
             z: -1
+            hoverEnabled: true
+            cursorShape: Qt.ArrowCursor
+            
+            // Improved auto-hiding behavior
+            onEntered: {
+                root.mouseInside = true
+                // Show when mouse enters, but only if we're currently hidden
+                if (root.isHidden) {
+                    root.isHidden = false
+                }
+            }
+            
+            onExited: {
+                root.mouseInside = false
+                // Auto-hide when mouse leaves, but with a delay to prevent flickering
+                // Only if auto-hiding is enabled
+                if (root.autoHideEnabled) {
+                    hideTimer.start()
+                }
+            }
+            
             onDoubleClicked: root.isHidden = !root.isHidden
+        }
+        
+        // Timer for delayed auto-hiding
+        Timer {
+            id: hideTimer
+            interval: 1000  // 1 second delay before hiding
+            repeat: false
+            onTriggered: {
+                // Only hide if mouse is still outside
+                // We'll use a property to track mouse state
+                if (!root.mouseInside) {
+                    root.isHidden = true
+                }
+            }
         }
 
         opacity: root.isHidden ? 0.0 : 1.0
-        Behavior on opacity { NumberAnimation { duration: 300 } }
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 150  // Optimized for high refresh rates
+                easing.type: Easing.InOutQuad
+                alwaysRunToEnd: true
+            }
+        }
 
         Column {
             anchors.fill: parent

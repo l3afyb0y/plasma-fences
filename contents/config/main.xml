@@ -39,8 +39,6 @@
         </entry>
 
         <entry name="layoutMode" type="String">
-        <!-- auto = stack for 1-2 panels, grid for 3+ -->
-        <entry name="layoutMode" type="String">
             <default>auto</default>
         </entry>
 

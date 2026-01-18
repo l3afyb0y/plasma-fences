@@ -1,20 +1,30 @@
-# Claude Code artifacts
-CLAUDE.md
-.claude/
+# Plasma Fences - Git Ignore
 
-# Editor/IDE
-*.swp
-*.swo
-*~
-.vscode/
-.idea/
-
-# OS files
+# User/System specific files
+.directory
 .DS_Store
 Thumbs.db
 
-# Implementation planning
+# Plasma/KDE temporary files
+*.plasmoid
+*.tar.gz
+
+# Development Artifacts
 PLAN.md
-/test_advanced_features.js
-/install_kde_hybrid.sh
-/hyprland-kde-hybrid.conf
+test_advanced_features.js
+install_kde_hybrid.sh
+hyprland-kde-hybrid.conf
+.claude/
+CLAUDE.md
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build/Temp
+dist/
+build/
+node_modules/

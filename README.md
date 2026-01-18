@@ -42,16 +42,25 @@ kpackagetool6 -t Plasma/Applet -i .
 ```
 
 ### Updating/Reinstalling
-To update or reinstall Plasma Fences:
-```bash
-# Safely uninstall (preserves your configuration)
-./uninstall.sh
+To update or reinstall Plasma Fences, use the included scripts. Your configuration is preserved during the process.
 
-# Then reinstall
-./install.sh
+## Uninstallation
+
+To safely remove Plasma Fences while preserving your configuration:
+
+```bash
+chmod +x uninstall.sh
+./uninstall.sh
 ```
 
-See [README-UNINSTALL.md](README-UNINSTALL.md) for detailed information about the uninstall process and data safety.
+### What Happens During Uninstall
+1. **Configuration Backup**: A backup of your fence layouts and settings is saved to your home directory (`plasma-fences-config-backup-YYYYMMDD-HHMMSS.txt`).
+2. **Data Safety**: Your actual files and folders are **never** removed or moved. Only the widget software is uninstalled.
+3. **Manual Method**:
+   ```bash
+   kpackagetool6 --type Plasma/Applet --remove org.kde.plasma.fences
+   rm -rf ~/.local/share/plasma/plasmoids/org.kde.plasma.fences
+   ```
 
 ## Usage
 

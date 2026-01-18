@@ -30,64 +30,23 @@ Item {
 
         var extension = fileName.split('.').pop().toLowerCase()
 
-        // Common file type mappings
+        // Core file type mappings
         var iconMap = {
-            // Documents
             "pdf": "application-pdf",
-            "doc": "application-msword",
-            "docx": "application-msword",
-            "odt": "application-vnd.oasis.opendocument.text",
             "txt": "text-plain",
             "md": "text-markdown",
-            // Spreadsheets
-            "xls": "application-vnd.ms-excel",
-            "xlsx": "application-vnd.ms-excel",
-            "ods": "application-vnd.oasis.opendocument.spreadsheet",
-            "csv": "text-csv",
-            // Presentations
-            "ppt": "application-vnd.ms-powerpoint",
-            "pptx": "application-vnd.ms-powerpoint",
-            "odp": "application-vnd.oasis.opendocument.presentation",
-            // Archives
             "zip": "application-zip",
             "tar": "application-x-tar",
             "gz": "application-gzip",
             "7z": "application-x-7z-compressed",
-            "rar": "application-x-rar",
-            // Code
-            "js": "application-javascript",
-            "json": "application-json",
-            "py": "text-x-python",
-            "sh": "application-x-shellscript",
-            "html": "text-html",
-            "css": "text-css",
-            "cpp": "text-x-c++src",
-            "c": "text-x-csrc",
-            "h": "text-x-chdr",
-            "rs": "text-rust",
-            "go": "text-x-go",
-            // Media
-            "mp3": "audio-mpeg",
-            "wav": "audio-x-wav",
-            "flac": "audio-flac",
-            "ogg": "audio-ogg",
-            "mp4": "video-mp4",
-            "mkv": "video-x-matroska",
-            "avi": "video-x-msvideo",
-            "webm": "video-webm",
-            // Images (fallback if thumbnail fails)
-            "png": "image-png",
-            "jpg": "image-jpeg",
-            "jpeg": "image-jpeg",
-            "gif": "image-gif",
-            "webp": "image-webp",
-            "svg": "image-svg+xml",
-            "bmp": "image-bmp",
-            // Apps
-            "desktop": "application-x-desktop",
-            "appimage": "application-x-executable",
-            // Other
-            "iso": "application-x-cd-image"
+            "mp3": "audio-x-generic",
+            "mp4": "video-x-generic",
+            "desktop": "application-x-desktop"
+        }
+
+        // Handle images
+        if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].includes(extension)) {
+            return "image-x-generic"
         }
 
         return iconMap[extension] || "text-x-generic"
@@ -166,6 +125,19 @@ Item {
                 cache: true
                 sourceSize.width: iconDelegate.iconSize * 2
                 sourceSize.height: iconDelegate.iconSize * 2
+                
+                // Enable GPU acceleration for image rendering
+                layer.enabled: true
+                layer.smooth: true
+                layer.mipmap: true
+                
+                // Optimize loading for high refresh rates
+                onStatusChanged: {
+                    if (status === Image.Ready) {
+                        // Force GPU upload when ready
+                        forceActiveFocus()
+                    }
+                }
             }
 
             // Fallback icon (for folders, non-images, or while loading/error)
