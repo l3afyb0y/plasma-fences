@@ -9,6 +9,7 @@ A desktop organization widget for KDE Plasma 6, inspired by Stardock Fences. It 
 
 		**IMPORTANT** 
 Last I checked, this project is not working correctly anymore. I need to take some time with it and sift through for a fix, but I have other projects that need some fixes first. 
+I no longer use KDE Plasma so this is a backburner project for me that I will get around to at some point. Apologies for any inconviences. I still am commited to this repo.
 Feel free to submit pull requests if you find a solution to the issue for me, and I will merge a working version and update the repo.
 
 
